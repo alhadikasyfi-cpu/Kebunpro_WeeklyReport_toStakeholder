@@ -11,7 +11,10 @@
 --     fallback harga rata-rata semua kebun di pekan itu. pendapatan = ton_terjual × 1000 × harga.
 --   * hari_aktif_input / user_aktif / catatan_* / tgl_input_terakhir memakai TANGGAL INPUT (created_at_utc0),
 --     bukan tanggal kegiatan: yang diukur adalah keaktifan memakai KebunPRO.
---   * user_terdaftar = akun yang pernah menginput dalam 9 pekan periode (bukan seluruh kontak di business_contact).
+--   * user_terdaftar = akun login UNIK (contact_detail.user_id) dari kontak kebun yang aktif:
+--     business_contact versi terbaru dengan is_active = 1 DAN inactive_at_utc0 IS NULL (semua role).
+--   * user_aktif = akun UNIK dari kontak aktif yang sama, yang menginput pada pekan itu.
+--     Kontak nonaktif / tanpa akun login tidak dihitung, sehingga user_aktif <= user_terdaftar.
 -- Kolom lokasi & akhir_langganan belum ada sumbernya di query ini (dikosongkan); lihat catatan di SELECT akhir.
 -- =====================================================================================================
 WITH params AS (
@@ -45,6 +48,35 @@ block_dedup AS (
     FROM default.block
     ORDER BY id ASC, updated_at_utc0 DESC NULLS LAST
     LIMIT 1 BY id
+),
+-- Kontak kebun yang AKTIF (versi terbaru per id) beserta akun login-nya
+bc_dedup AS (
+    SELECT id, business_id, contact_detail_id, is_active, inactive_at_utc0
+    FROM default.business_contact
+    ORDER BY id ASC, updated_at_utc0 DESC NULLS LAST
+    LIMIT 1 BY id
+),
+cd_dedup AS (
+    SELECT id, user_id
+    FROM default.contact_detail
+    ORDER BY id ASC, updated_at_utc0 DESC NULLS LAST
+    LIMIT 1 BY id
+),
+active_accounts AS (
+    SELECT
+        lower(toString(bc.id)) AS acc_contact_id,
+        lower(toString(bc.business_id)) AS acc_business_id,
+        nullIf(toString(cd.user_id), '') AS acc_user_id
+    FROM bc_dedup AS bc
+    INNER JOIN business_data AS bd ON lower(toString(bc.business_id)) = bd.id
+    LEFT JOIN cd_dedup AS cd ON toUUIDOrNull(toString(cd.id)) = bc.contact_detail_id
+    WHERE (bc.is_active = 1)
+      AND (bc.inactive_at_utc0 IS NULL)
+),
+users_registered AS (
+    SELECT acc_business_id AS reg_business_id, uniqExactIf(acc_user_id, acc_user_id IS NOT NULL) AS u_registered
+    FROM active_accounts
+    GROUP BY acc_business_id
 ),
 collection_point_dedup AS (
     SELECT id, block_id
@@ -215,20 +247,17 @@ events AS (
 ),
 activity_w AS (
     SELECT
-        business_id, wk,
-        uniqExact(input_date) AS a_days,
-        uniqExactIf(contact, contact IS NOT NULL) AS a_users,
-        uniqExactIf(activity_id, kind = 'panen') AS a_panen,
-        uniqExactIf(activity_id, kind = 'muat')  AS a_muat,
-        uniqExactIf(activity_id, kind = 'jual')  AS a_jual,
-        uniqExactIf(activity_id, kind = 'rawat') AS a_rawat
-    FROM events
-    GROUP BY business_id, wk
-),
-users_period AS (
-    SELECT business_id, uniqExactIf(contact, contact IS NOT NULL) AS u_registered
-    FROM events
-    GROUP BY business_id
+        ev.business_id AS business_id, ev.wk AS wk,
+        uniqExact(ev.input_date) AS a_days,
+        -- akun unik dari kontak aktif (is_active = 1, inactive_at_utc0 IS NULL) yang menginput pekan ini
+        uniqExactIf(aa.acc_user_id, aa.acc_user_id IS NOT NULL) AS a_users,
+        uniqExactIf(ev.activity_id, ev.kind = 'panen') AS a_panen,
+        uniqExactIf(ev.activity_id, ev.kind = 'muat')  AS a_muat,
+        uniqExactIf(ev.activity_id, ev.kind = 'jual')  AS a_jual,
+        uniqExactIf(ev.activity_id, ev.kind = 'rawat') AS a_rawat
+    FROM events AS ev
+    LEFT JOIN active_accounts AS aa ON (aa.acc_contact_id = ev.contact) AND (aa.acc_business_id = ev.business_id)
+    GROUP BY ev.business_id, ev.wk
 ),
 -- semua tanggal input (sampai 180 hari sebelum periode) untuk tgl_input_terakhir per pekan
 input_dates AS (
@@ -418,7 +447,7 @@ SELECT
     ifNull(ba.block_no_area, 0)                                AS blok_tanpa_luas
 FROM grid AS g
 LEFT JOIN business_area AS ba ON ba.business_id = g.business_id
-LEFT JOIN users_period  AS up ON up.business_id = g.business_id
+LEFT JOIN users_registered AS up ON up.reg_business_id = g.business_id
 LEFT JOIN input_dates   AS idt ON idt.business_id = g.business_id
 LEFT JOIN activity_w    AS a  ON (a.business_id = g.business_id)  AND (a.wk = g.wk)
 LEFT JOIN harvest_w     AS hw ON (hw.business_id = g.business_id) AND (hw.wk = g.wk)
