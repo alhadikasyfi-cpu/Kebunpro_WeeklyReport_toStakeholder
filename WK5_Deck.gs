@@ -179,7 +179,7 @@ function wkGenerateWeeklyDeck() {
       pageIds.push(cover.getObjectId());
     }
 
-    const ai = wkReadAiAnswer(wkAiSheet(d.ss).getRange(WK_AI_CELL).getValue(), an, warnings);
+    const ai = wkReadAiAnswer(wkAiSheet(d.sheet).getRange(WK_AI_CELL).getValue(), an, warnings);
     const specs = wkPlanSlides(an, ai);
     specs.forEach(sp => {
       const s = pres.appendSlide(tContent);

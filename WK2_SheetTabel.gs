@@ -70,7 +70,8 @@ function wkBuatHeaderTabel() {
   const keys = WK_COLUMNS.map(c => c.key);
   const width = Math.max(sh.getLastColumn(), keys.length);
   const cur = sh.getRange(1, 1, 1, width).getDisplayValues()[0];
-  const same = keys.every((k, i) => wkNorm(cur[i]) === k) && cur.slice(keys.length).every(v => !String(v).trim());
+  // label jawaban Claude (AF1) di kanan tabel tidak dianggap header lain
+  const same = keys.every((k, i) => wkNorm(cur[i]) === k) && cur.slice(keys.length).every(v => !String(v).trim() || /^JAWABAN CLAUDE/.test(v));
   if (!same && cur.some(v => String(v).trim()) && ui) {
     const ok = ui.alert('Header lama akan diganti',
       `Baris 1 sheet '${sh.getName()}' sudah berisi teks lain. Ganti dengan header weekly (${keys.length} kolom)? Data di baris 2 ke bawah tidak diubah.`,
@@ -90,11 +91,12 @@ function wkBuatHeaderTabel() {
   const rows = Math.max(sh.getMaxRows() - 1, 1);
   WK_COLUMNS.forEach((c, i) => sh.getRange(2, i + 1, rows, 1).setNumberFormat(WK_NUMBER_FORMAT[c.type]));
   sh.autoResizeColumns(1, keys.length);
+  wkAiSheet(sh);   // label + sel jawaban Claude (AF1/AF2) di kanan tabel
 
   const msg = `Header ${keys.length} kolom sudah dibuat di sheet '${sh.getName()}'.\n\n` +
     'Tempel data mulai sel A2: 1 baris = 1 kebun × 1 pekan (Senin–Minggu), minimal ' + WK_CONFIG.TREND_WEEKS + ' pekan terakhir. ' +
     'Kebun tanpa input tetap diberi baris dengan angka 0. Arahkan kursor ke tiap header untuk melihat penjelasannya. ' +
-    'Kolom berwarna abu (tim SawitPRO) opsional.';
+    'Kolom berwarna abu (tim SawitPRO) opsional. Jawaban Claude ditempel di sel ' + WK_AI_CELL + ' (kolom kuning di kanan tabel).';
   if (ui) ui.alert(msg); else Logger.log(msg);
 }
 

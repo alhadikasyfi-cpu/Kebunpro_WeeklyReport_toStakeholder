@@ -2,14 +2,14 @@
  * File WK6: Claude.gs
  * Teks deck (judul, INSIGHT, speaker notes) ditulis Claude, sama seperti deck monthly: script TIDAK memanggil API AI.
  *   1. Menu "Salin paket data untuk Claude" menampilkan PAKET (panduan + data pekan ini) untuk ditempel ke chat Claude.
- *   2. Jawaban Claude (satu baris JSON) ditempel ke sel A2 sheet "Weekly AI".
+ *   2. Jawaban Claude (satu baris JSON) ditempel ke sel AF2 sheet "Weekly report" (di kanan tabel data, kolom A–AE).
  *   3. "Generate Weekly Deck" membaca jawaban itu. Bila kosong / tidak cocok dengan data (ID_PAKET beda),
  *      deck memakai teks otomatis dari data.
  * Nama kebun disamarkan (KEBUN_01, ...) di paket dan dikembalikan ke nama asli saat jawaban dibaca.
  */
 
-const WK_AI_SHEET = 'Weekly AI';
-const WK_AI_CELL = 'A2';
+// Sel jawaban Claude di sheet tabel weekly (WK_CONFIG.SHEET_NAME). Harus di LUAR tabel data (kolom A–AE).
+const WK_AI_CELL = 'AF2';
 const WK_AI_LIMITS = { TITLE: 47, INSIGHT_SIDE: 420, INSIGHT_WIDE: 330, NOTES: 1400 };
 const WK_SLIDE_IDS = ['ringkasan', 'tren', 'tindak'];
 
@@ -107,7 +107,7 @@ function wkBuildPacket(an) {
     '',
     'FORMAT JAWABAN (WAJIB): satu blok kode berisi SATU objek JSON dalam SATU BARIS (tanpa baris baru), tanpa tanda kutip ganda di dalam teks (pakai kutip tunggal):',
     `{"packet_id":"${id}","slides":[{"id":"ringkasan","title":"...","insight":"...","speaker_notes":"..."},{"id":"tren","title":"...","insight":"...","speaker_notes":"..."},{"id":"tindak","title":"...","insight":"...","speaker_notes":"..."}]}`,
-    'Setelah blok kode, tulis satu kalimat: "Tempel ke sel A2 sheet Weekly AI."'
+    `Setelah blok kode, tulis satu kalimat: "Tempel ke sel ${WK_AI_CELL} sheet ${WK_CONFIG.SHEET_NAME}."`
   ].join('\n');
   return { id, text: `=== PAKET DATA WEEKLY KEBUNPRO ===\nID_PAKET: ${id}\n\n${guide}\n\n${data}\n=== AKHIR PAKET ===` };
 }
@@ -117,10 +117,10 @@ function wkSalinPaketClaude() {
   const d = wkLoad();
   if (d.error) return wkAlert(d.error);
   const pk = wkBuildPacket(d.an);
-  wkAiSheet(d.ss);
+  wkAiSheet(d.sheet);
   const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const html = `<div style="font-family:Arial,sans-serif;font-size:12px">
-    <p>1. Salin paket di bawah, tempel ke chat Claude.<br>2. Salin jawaban JSON Claude, tempel ke sel <b>${WK_AI_CELL}</b> sheet <b>${WK_AI_SHEET}</b>.<br>
+    <p>1. Salin paket di bawah, tempel ke chat Claude.<br>2. Salin jawaban JSON Claude, tempel ke sel <b>${WK_AI_CELL}</b> sheet <b>${esc(d.sheet.getName())}</b> (di kanan tabel).<br>
     3. Jalankan <b>Generate Weekly Deck</b>. Pekan laporan: <b>${esc(d.an.labelLaporan)}</b> · ID_PAKET <b>${pk.id}</b></p>
     <textarea id="t" style="width:100%;height:330px;font-family:monospace;font-size:11px">${esc(pk.text)}</textarea>
     <button onclick="var t=document.getElementById('t');t.select();document.execCommand('copy');this.innerText='Tersalin'"
@@ -130,15 +130,16 @@ function wkSalinPaketClaude() {
   else Logger.log(pk.text);
 }
 
-/** Sheet jawaban Claude (dibuat bila belum ada). */
-function wkAiSheet(ss) {
-  let sh = ss.getSheets().find(s => s.getName().trim().toLowerCase() === WK_AI_SHEET.toLowerCase());
-  if (!sh) {
-    sh = ss.insertSheet(WK_AI_SHEET);
-    sh.getRange('A1').setValue(`Tempel jawaban JSON Claude (satu baris) di sel ${WK_AI_CELL}. Kosongkan sel itu untuk memakai teks otomatis.`).setFontWeight('bold');
-    sh.setColumnWidth(1, 900);
+/** Menyiapkan sel jawaban Claude di sheet tabel weekly: label di atasnya dan format teks. Mengembalikan sheet. */
+function wkAiSheet(sheet) {
+  const cell = sheet.getRange(WK_AI_CELL);
+  const label = sheet.getRange(cell.getRow() - 1, cell.getColumn());
+  if (wkBlank(label.getValue())) {
+    label.setValue('JAWABAN CLAUDE (tempel di bawah ini)').setFontWeight('bold').setBackground('#fcd102')
+      .setNote(`Tempel jawaban JSON Claude (satu baris) di sel ${WK_AI_CELL}. Kosongkan sel itu untuk memakai teks otomatis.`);
   }
-  return sh;
+  cell.setNumberFormat('@').setWrap(false);
+  return sheet;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -165,7 +166,7 @@ function wkCutSentence(text, max) {
  * Hasil: {ringkasan: {title, insight, notes}, ...}
  */
 function wkReadAiAnswer(raw, an, warnings) {
-  if (wkBlank(raw)) { warnings.push(`Sel ${WK_AI_CELL} sheet ${WK_AI_SHEET} kosong: judul, INSIGHT, dan speaker notes memakai teks otomatis.`); return null; }
+  if (wkBlank(raw)) { warnings.push(`Sel ${WK_AI_CELL} sheet ${WK_CONFIG.SHEET_NAME} kosong: judul, INSIGHT, dan speaker notes memakai teks otomatis.`); return null; }
   const obj = wkParseAnswer(raw);
   if (!obj || !Array.isArray(obj.slides)) { warnings.push('Jawaban Claude tidak terbaca sebagai JSON; teks otomatis dipakai. Minta Claude mengulang dalam satu baris JSON.'); return null; }
   const id = wkBuildPacket(an).id;

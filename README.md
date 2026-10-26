@@ -26,7 +26,7 @@ Setiap slide memuat baris tanggal pekan laporan vs pekan pembanding, kartu INSIG
 Judul, INSIGHT, dan speaker notes ditulis Claude dengan cara yang sama seperti monthly (script tidak memanggil API AI):
 
 1. **📅 Weekly Report → 3. Salin paket data untuk Claude.** Salin paketnya, lalu tempel ke chat Claude. Panduan untuk Claude sudah ada di dalam paket, dan nama kebun disamarkan (KEBUN_01, ...).
-2. Tempel jawaban JSON Claude ke sel **A2 sheet `Weekly AI`**. Sheet ini dibuat otomatis.
+2. Tempel jawaban JSON Claude ke sel **AF2 di sheet `Weekly report`**, di kanan tabel data (kolom A–AE). Sel AF1 diberi label kuning secara otomatis.
 3. **4. Generate Weekly Deck.** Nama asli kebun dikembalikan otomatis.
 
 Kalau sel A2 kosong, atau jawaban Claude dibuat untuk data lama (ID_PAKET berbeda), deck tetap jadi dengan **teks otomatis** dari data.
@@ -40,7 +40,7 @@ Kalau sel A2 kosong, atau jawaban Claude dibuat untuk data lama (ID_PAKET berbed
 | `WK3_Analisis.gs` | Pekan laporan, perbandingan dengan pekan lalu, tren, status kebun, KPI |
 | `WK4_Gambar.gs` | Kartu KPI, grafik mini, tabel, kartu INSIGHT (Google Slides API) |
 | `WK5_Deck.gs` | Menu, file deck tetap, rencana 3 slide, teks otomatis |
-| `WK6_Claude.gs` | Paket data untuk Claude dan pembaca jawaban |
+| `WK6_Claude.gs` | Paket data untuk Claude dan pembaca jawaban (sel AF2) |
 | `query_weekly_report.sql` | Query Metabase/ClickHouse untuk tabel `Weekly report` |
 | `uji_weekly.js` | Uji lokal: `node uji_weekly.js` |
 
@@ -60,7 +60,7 @@ Tanpa menu, fungsi bisa dijalankan dari editor. Buka file `WK5_Deck`, pilih `wkG
 
 1. Jalankan `query_weekly_report.sql` di Metabase dengan memilih `awal_pekan`, lalu tempel hasilnya ke sheet `Weekly report` (mulai A1, header ikut).
 2. **2. Cek data weekly**: memeriksa pekan laporan, pembanding, dan peringatan.
-3. **3. Salin paket data untuk Claude**, lalu tempel jawaban Claude ke `Weekly AI!A2`. Langkah ini opsional.
+3. **3. Salin paket data untuk Claude**, lalu tempel jawaban Claude ke sel `AF2` sheet `Weekly report`. Langkah ini opsional.
 4. **4. Generate Weekly Deck**.
 
 ## Kolom tabel `Weekly report`
