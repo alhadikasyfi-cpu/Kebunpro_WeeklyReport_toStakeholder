@@ -154,90 +154,113 @@ WkBatch.prototype.flush = function (presId) {
 /* Komponen                                                                  */
 /* ------------------------------------------------------------------------- */
 
-/** Paragraf pembuka lebar penuh; mengembalikan posisi bawahnya. */
-function wkDrawLead(b, text, top) {
-  const L = WK_CONFIG.LAYOUT, T = WK_CONFIG.TYPE, w = L.RIGHT - L.MARGIN;
-  const h = wkEstLines(text, T.LEAD, w) * T.LEAD * 1.5;
-  b.text(text, L.MARGIN, top, w, h, { size: T.LEAD, color: WK_CONFIG.COLOR.MUTED, lineSpacing: 150 });
-  return top + h;
+/** Teks dengan **tebal**: dipecah menjadi segmen (angka kunci tebal hijau). */
+function wkBoldSegs(text, size, color) {
+  const W = WK_CONFIG.WEIGHT;
+  return String(text || ' ').split('**').map((part, i) => ({ text: part, size,
+    weight: i % 2 ? W.HEAVY : W.BODY, color: i % 2 ? WK_CONFIG.COLOR.GREEN : color })).filter(x => x.text);
+}
+function wkStripBold(text) { return String(text || '').replace(/\*\*/g, ''); }
+
+/** Baris tanggal di bawah garis judul: pekan laporan vs pekan pembanding (dipasang di setiap slide). */
+function wkDrawPeriod(b, text) {
+  const L = WK_CONFIG.LAYOUT, T = WK_CONFIG.TYPE;
+  b.text(text, L.MARGIN, L.PERIOD_Y, L.RIGHT - L.MARGIN, 12, { size: T.CAPTION, weight: WK_CONFIG.WEIGHT.HEAVY, color: WK_CONFIG.COLOR.GREEN });
+}
+
+/** Kartu INSIGHT (gaya kartu template): label + teks dengan angka kunci tebal. Mengembalikan tinggi kartu. */
+function wkDrawInsightCard(b, text, l, t, w, h) {
+  const C = WK_CONFIG.COLOR, T = WK_CONFIG.TYPE, P = WK_CONFIG.LAYOUT.INSIGHT.pad;
+  const inner = w - 2 * P;
+  const textH = wkEstLines(wkStripBold(text), T.BODY, inner) * T.BODY * 1.5;
+  const cardH = h || (P + T.CAPTION * 1.3 + 6 + textH + P);
+  b.rect(l, t, w, cardH, { round: true, fill: C.TINT, border: C.BORDER });
+  b.text('INSIGHT', l + P, t + P, inner, T.CAPTION * 1.3, { size: T.CAPTION, weight: WK_CONFIG.WEIGHT.HEAVY, color: C.GREEN });
+  b.text('', l + P, t + P + T.CAPTION * 1.3 + 6, inner, Math.max(textH, cardH - 2 * P - T.CAPTION * 1.3 - 6),
+    { segs: wkBoldSegs(text, T.BODY, C.MUTED), lineSpacing: 150 });
+  return cardH;
+}
+
+/** Grafik batang mini (sparkline) tren pekan per pekan; pekan laporan hijau tua. */
+function wkDrawSpark(b, values, l, t, w, h) {
+  const C = WK_CONFIG.COLOR;
+  const vals = values.map(v => (v === null || v === undefined || !isFinite(v) ? null : v));
+  const max = Math.max.apply(null, vals.filter(v => v !== null).concat([0])) || 1;
+  const step = w / vals.length, bw = step * 0.62;
+  b.line(l, t + h, l + w, t + h, C.BORDER, 0.75);
+  vals.forEach((v, i) => {
+    if (v === null || v <= 0) return;
+    const bh = Math.max(h * v / max, 0.8);
+    b.rect(l + step * i + (step - bw) / 2, t + h - bh, bw, bh, { fill: i === vals.length - 1 ? C.GREEN : C.CHART_LIGHT });
+  });
+}
+
+/** Warna perubahan: naik baik (hijau) kecuali goodDown (mis. % tanpa berat: turun = baik). */
+function wkDeltaColor(d, goodDown) {
+  const C = WK_CONFIG.COLOR;
+  if (!d || !d.dir) return C.INK;
+  return (d.dir > 0) !== !!goodDown ? C.GREEN : C.DANGER;
 }
 
 /**
- * Kartu KPI (3 kolom; 4 kartu = 1 baris). kpis: [{name, value, unit, note, tone: good|bad|null}]
- * Kartu mengisi ruang dari top0 sampai batas bawah slide.
+ * Kartu KPI: LABEL → angka (+satuan) → % perubahan vs pekan lalu → grafik mini 8 pekan → angka pekan lalu.
+ * kpis: [{name, value, unit, delta: wkDelta(), goodDown, prevTxt, spark: [..]}]; area: {left, top, width, height}
  */
-function wkDrawKpiCards(b, kpis, top0) {
-  const C = WK_CONFIG.COLOR, L = WK_CONFIG.LAYOUT, T = WK_CONFIG.TYPE, W = WK_CONFIG.WEIGHT;
-  const n = kpis.length, cols = n === 4 ? 4 : Math.min(3, n), rows = Math.ceil(n / cols);
-  const gap = L.CARD_GAP, P = L.CARD_PAD;
-  const w = (L.RIGHT - L.MARGIN - gap * (cols - 1)) / cols, inner = w - 2 * P;
-  const cardH = (L.BOTTOM - top0 - gap * (rows - 1)) / rows;
+function wkDrawKpiCards(b, kpis, area, cols) {
+  const C = WK_CONFIG.COLOR, T = WK_CONFIG.TYPE, W = WK_CONFIG.WEIGHT, gap = 8, P = 10;
+  const rows = Math.ceil(kpis.length / cols);
+  const w = (area.width - gap * (cols - 1)) / cols, h = (area.height - gap * (rows - 1)) / rows, inner = w - 2 * P;
   kpis.forEach((k, i) => {
-    const left = L.MARGIN + (i % cols) * (w + gap), top = top0 + Math.floor(i / cols) * (cardH + gap);
-    b.rect(left, top, w, cardH, { round: true, fill: C.TINT, border: C.BORDER });
-    const room = inner - (k.unit ? wkEstWidth(' ' + k.unit, T.KPI_UNIT, true) : 0);
-    const vs = wkEstWidth(k.value, T.KPI_VALUE, true) <= room ? T.KPI_VALUE : T.KPI_COMPACT;
-    const noteH = wkEstLines(k.note, T.BODY, inner) * T.BODY * 1.4;
-    const contentH = T.KPI_LABEL * 1.3 + 4.5 + vs * 1.1 + 4.5 + noteH;
-    let y = top + Math.max(P, (cardH - contentH) / 2);
-    b.text(String(k.name).toUpperCase(), left + P, y, inner, T.KPI_LABEL * 1.3, { size: T.KPI_LABEL, weight: W.TITLE, color: C.MUTED });
-    y += T.KPI_LABEL * 1.3 + 4.5;
+    const left = area.left + (i % cols) * (w + gap), top = area.top + Math.floor(i / cols) * (h + gap);
+    b.rect(left, top, w, h, { round: true, fill: C.TINT, border: C.BORDER });
+    let y = top + P;
+    b.text(String(k.name).toUpperCase(), left + P, y, inner, 11, { size: T.KPI_LABEL, weight: W.TITLE, color: C.MUTED });
+    y += 14;
+    const unitW = k.unit ? wkEstWidth(' ' + k.unit, T.KPI_UNIT, true) : 0;
+    const vs = [T.KPI_COMPACT, 22, 18, 15].find(sz => wkEstWidth(k.value, sz, true) + unitW <= inner) || 15;
     const segs = [{ text: String(k.value), size: vs, weight: W.HEAVY, color: C.GREEN }];
     if (k.unit) segs.push({ text: ' ' + k.unit, size: T.KPI_UNIT, weight: W.STRONG, color: C.MUTED });
-    b.text('', left + P, y, inner, vs * 1.1, { segs, valign: 'BOTTOM' });
-    y += vs * 1.1 + 4.5;
-    b.text(k.note || ' ', left + P, y, inner, noteH, { size: T.BODY, weight: W.STRONG, lineSpacing: 130,
-      color: k.tone === 'good' ? C.GREEN : (k.tone === 'bad' ? C.DANGER : C.INK) });
+    b.text('', left + P, y, inner, 28, { segs, valign: 'BOTTOM' });
+    y += 31;
+    b.text('', left + P, y, inner, 13, { segs: [
+      { text: k.delta.txt, size: T.BODY, weight: W.HEAVY, color: wkDeltaColor(k.delta, k.goodDown) },
+      { text: ' vs pekan lalu', size: T.CAPTION, weight: W.STRONG, color: C.MUTED }] });
+    y += 16;
+    const sparkH = Math.max(12, top + h - P - 12 - 4 - y);
+    wkDrawSpark(b, k.spark, left + P, y, inner, sparkH);
+    b.text(k.prevTxt || ' ', left + P, top + h - P - 11, inner, 11, { size: T.CAPTION, color: C.MUTED });
   });
-}
-
-/** Skala sumbu "bagus" (kelipatan 1/2/2,5/5 × 10^k). */
-function wkNiceScale(maxVal) {
-  const hi = Math.max(0, maxVal) || 1;
-  const raw = hi * 1.15 / 5;
-  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
-  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw);
-  const max = Math.ceil(hi * 1.15 / step) * step;
-  const ticks = [];
-  for (let v = 0; v <= max + step / 2; v += step) ticks.push(Number(v.toFixed(6)));
-  return { max, ticks };
 }
 
 /**
- * Grafik batang pekan per pekan di area konten kiri (kartu INSIGHT di kanan).
- * labels/values sejajar; pekan terakhir (pekan laporan) hijau tua, pekan lain hijau muda.
- * o: {caption, labelFmt, axisFmt}
+ * Grafik kecil tren pekan per pekan (small multiple): judul + % perubahan, batang 8 pekan,
+ * nilai pekan laporan di atas batang terakhir, label pekan pertama & terakhir di bawah.
  */
-function wkDrawBarChart(b, labels, values, o) {
-  o = o || {};
-  const A = WK_CONFIG.LAYOUT.CONTENT, C = WK_CONFIG.COLOR, T = WK_CONFIG.TYPE, W = WK_CONFIG.WEIGHT;
-  const padL = 40, padT = 30, padR = 6, padB = 22;
-  const x0 = A.left + padL, y0 = A.top + padT, pw = A.width - padL - padR, ph = A.height - padT - padB, yb = y0 + ph;
-  const vals = values.map(v => (v === null || v === undefined || !isFinite(v) ? null : v));
-  const sc = wkNiceScale(Math.max.apply(null, vals.filter(v => v !== null).concat([0])));
-  const yOf = v => yb - ph * (Math.max(0, v) / sc.max);
-  const lf = o.labelFmt || wkFmtAuto, af = o.axisFmt || lf;
-  if (o.caption) b.text(o.caption, A.left, A.top, A.width, 14, { size: T.CAPTION, weight: W.TITLE, color: C.MUTED });
-  sc.ticks.forEach(t => {
-    if (t) b.line(x0, yOf(t), x0 + pw, yOf(t), C.DIVIDER, 0.75);
-    b.text(af(t), A.left, yOf(t) - 6, padL - 4, 12, { size: T.CAPTION, color: C.MUTED, align: 'END', valign: 'MIDDLE' });
-  });
-  b.line(x0, yb, x0 + pw, yb, C.MUTED, 0.75);
-  const step = pw / vals.length, bw = step * 0.62;
+function wkDrawMiniChart(b, m, labels, l, t, w, h) {
+  const C = WK_CONFIG.COLOR, T = WK_CONFIG.TYPE, W = WK_CONFIG.WEIGHT;
+  b.rect(l, t, w, h, { round: true, fill: C.SURFACE, border: C.BORDER });
+  const P = 9, inner = w - 2 * P;
+  b.text(m.title, l + P, t + P, inner * 0.62, 12, { size: T.CAPTION, weight: W.HEAVY, color: C.INK });
+  b.text(m.delta.txt, l + P + inner * 0.62, t + P, inner * 0.38, 12, { size: T.CAPTION, weight: W.HEAVY, align: 'END',
+    color: wkDeltaColor(m.delta, m.goodDown) });
+  const chartTop = t + P + 30, chartH = h - P - 30 - 14 - P;
+  const vals = m.values.map(v => (v === null || v === undefined || !isFinite(v) ? null : v));
+  const max = Math.max.apply(null, vals.filter(v => v !== null).concat([0])) || 1;
+  const step = inner / vals.length, bw = step * 0.6, yb = chartTop + chartH;
+  b.line(l + P, yb, l + P + inner, yb, C.MUTED, 0.75);
   vals.forEach((v, i) => {
-    const cx = x0 + step * (i + 0.5), last = i === vals.length - 1;
-    b.text(labels[i], cx - step / 2, yb + 4, step, 12, { size: T.CAPTION, color: last ? C.INK : C.MUTED, weight: last ? W.HEAVY : W.BODY, align: 'CENTER' });
-    if (v === null) { b.text('-', cx - step / 2, yb - 16, step, 12, { size: T.CAPTION, color: C.NEUTRAL, align: 'CENTER' }); return; }
-    const top = yOf(v);
-    b.rect(cx - bw / 2, top, bw, Math.max(yb - top, 0.5), { fill: last ? C.GREEN : C.CHART_LIGHT });
-    b.text(lf(v), cx - step / 2, top - 15, step, 12, { size: T.CAPTION, color: last ? C.GREEN : C.MUTED, weight: last ? W.HEAVY : W.STRONG, align: 'CENTER' });
+    const last = i === vals.length - 1, x = l + P + step * i;
+    if (v !== null && v > 0) {
+      const bh = Math.max(chartH * v / max, 0.8);
+      b.rect(x + (step - bw) / 2, yb - bh, bw, bh, { fill: last ? C.GREEN : C.CHART_LIGHT });
+    }
+    // nilai: pekan laporan (tebal) dan pekan pertama sebagai acuan awal tren
+    // label rata kiri di batang pertama dan rata kanan di batang terakhir agar tidak keluar dari kartu
+    if ((last || i === 0) && v !== null) b.text(m.fmt(v), last ? x + step - 60 : x, yb - (v > 0 ? chartH * v / max : 0) - 13, 60, 11,
+      { size: T.CAPTION, weight: last ? W.HEAVY : W.STRONG, color: last ? C.GREEN : C.MUTED, align: last ? 'END' : 'START' });
   });
-}
-
-/** Tabel lebar penuh di bawah judul. */
-function wkDrawFullTable(b, data, o) {
-  const L = WK_CONFIG.LAYOUT;
-  b.table(L.MARGIN, L.BODY_TOP, L.RIGHT - L.MARGIN, data, o);
+  b.text(labels[0], l + P, yb + 3, 60, 11, { size: T.CAPTION, color: C.MUTED });
+  b.text(labels[labels.length - 1], l + P + inner - 60, yb + 3, 60, 11, { size: T.CAPTION, weight: W.HEAVY, color: C.INK, align: 'END' });
 }
 
 /** Warna kata status (sehat hijau, perlu perhatian oranye, berisiko merah). */

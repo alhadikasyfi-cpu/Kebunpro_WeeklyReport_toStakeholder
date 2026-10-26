@@ -1,7 +1,11 @@
 -- =====================================================================================================
 -- Weekly Report KebunPRO (ClickHouse / Metabase)
--- 1 baris = 1 kebun (business) × 1 pekan (Senin–Minggu, WIB). Hasil ditempel ke sheet "Weekly report" mulai A1/A2.
--- Periode: 9 pekan = 8 pekan lengkap + pekan berjalan (pekan berjalan otomatis diabaikan script deck).
+-- 1 baris = 1 kebun (business) × 1 pekan (WIB). Hasil ditempel ke sheet "Weekly report" mulai A1/A2.
+-- AWAL PEKAN dipilih lewat variabel Metabase {{awal_pekan}} (tipe Text, dropdown: Senin, Kamis; default Senin):
+--   Senin -> pekan Senin–Minggu, Kamis -> pekan Kamis–Rabu. week_start berisi tanggal hari awal pekan itu, dan
+--   script deck mendeteksi hari awal pekan otomatis dari kolom week_start.
+-- Periode: 9 pekan = 8 pekan lengkap + pekan berjalan. Script deck melaporkan pekan berjalan bila sudah ≥ 5 hari,
+--   selain itu pekan sebelumnya.
 -- Setiap kebun SELALU punya baris tiap pekan (angka 0 bila tidak ada input), agar kebun yang "diam" terdeteksi.
 --
 -- Definisi mengikuti query monthly:
@@ -20,8 +24,10 @@
 WITH params AS (
     SELECT
         toDate(now() + toIntervalHour(7)) AS today_wib,
-        toMonday(today_wib) AS this_monday,
-        subtractWeeks(this_monday, 8) AS start_week          -- ubah 8 bila ingin lebih banyak pekan tren
+        -- 0 = pekan mulai Senin, 3 = pekan mulai Kamis (Senin + 3 hari)
+        if(lower(trimBoth(coalesce([[ {{awal_pekan}}, ]] 'Senin'))) IN ('kamis', 'thursday', 'thu'), 3, 0) AS week_offset,
+        addDays(toMonday(subtractDays(today_wib, week_offset)), week_offset) AS this_week,
+        subtractWeeks(this_week, 8) AS start_week          -- ubah 8 (dan numbers(9) di CTE weeks) bila ingin lebih banyak pekan
 ),
 
 business_data AS (
@@ -235,7 +241,7 @@ log_contact AS (
 events AS (
     SELECT
         e.business_id AS business_id,
-        toMonday(e.input_date) AS wk,
+        addDays(toMonday(subtractDays(e.input_date, (SELECT week_offset FROM params))), (SELECT week_offset FROM params)) AS wk,
         e.input_date AS input_date,
         e.kind AS kind,
         e.activity_id AS activity_id,
@@ -269,13 +275,13 @@ input_dates AS (
 
 -- ===== PRODUKSI per pekan =====
 harvest_w AS (
-    SELECT business_id, toMonday(act_date) AS wk, sum(jjg) AS p_harvest
+    SELECT business_id, addDays(toMonday(subtractDays(act_date, (SELECT week_offset FROM params))), (SELECT week_offset FROM params)) AS wk, sum(jjg) AS p_harvest
     FROM harvest
     WHERE act_date >= (SELECT start_week FROM params)
     GROUP BY business_id, wk
 ),
 load_w AS (
-    SELECT business_id, toMonday(act_date) AS wk,
+    SELECT business_id, addDays(toMonday(subtractDays(act_date, (SELECT week_offset FROM params))), (SELECT week_offset FROM params)) AS wk,
         sum(jjg) AS p_load,
         sumIf(jjg, trip_id IN (SELECT id FROM active_trip)) AS p_trip
     FROM loads
@@ -283,7 +289,7 @@ load_w AS (
     GROUP BY business_id, wk
 ),
 sale_w AS (
-    SELECT business_id, toMonday(input_date) AS wk,
+    SELECT business_id, addDays(toMonday(subtractDays(input_date, (SELECT week_offset FROM params))), (SELECT week_offset FROM params)) AS wk,
         sumIf(qty, is_complete) AS p_sold,
         sumIf(qty, (qty > 0) AND (weight_kg <= 0)) AS p_sold_noweight,
         sumIf(weight_kg, is_complete) / 1000. AS p_ton
@@ -295,10 +301,10 @@ sale_w AS (
 area_w AS (
     SELECT x.business_id AS business_id, x.wk AS wk, sum(vb.area_ha) AS p_area
     FROM (
-        SELECT business_id, toMonday(act_date) AS wk, block_id FROM harvest
+        SELECT business_id, addDays(toMonday(subtractDays(act_date, (SELECT week_offset FROM params))), (SELECT week_offset FROM params)) AS wk, block_id FROM harvest
         WHERE (act_date >= (SELECT start_week FROM params)) AND (jjg > 0)
         UNION DISTINCT
-        SELECT business_id, toMonday(input_date) AS wk, block_id FROM sales
+        SELECT business_id, addDays(toMonday(subtractDays(input_date, (SELECT week_offset FROM params))), (SELECT week_offset FROM params)) AS wk, block_id FROM sales
         WHERE (input_date >= (SELECT start_week FROM params)) AND is_complete
     ) AS x
     INNER JOIN valid_block AS vb ON vb.block_id = x.block_id
@@ -307,7 +313,7 @@ area_w AS (
 
 -- ===== BIAYA per pekan (activity_date; filter sama dengan query biaya monthly) =====
 cost_w AS (
-    SELECT business_id, toMonday(act_date) AS wk,
+    SELECT business_id, addDays(toMonday(subtractDays(act_date, (SELECT week_offset FROM params))), (SELECT week_offset FROM params)) AS wk,
         sumIf(total_cost, cat = 'HARVEST') AS c_harvest,
         sumIf(total_cost, cat = 'LOAD')    AS c_load,
         sumIf(total_cost, cat = 'UPKEEP')  AS c_upkeep
@@ -380,7 +386,7 @@ wt AS (
 ticket_price AS (
     SELECT
         ad.business_id AS business_id,
-        toMonday(ad.delivered_date_tz) AS wk,
+        addDays(toMonday(subtractDays(ad.delivered_date_tz, (SELECT week_offset FROM params))), (SELECT week_offset FROM params)) AS wk,
         coalesce(wt.weight_net_adjusted_kg, wt.weight_net_kg, 0.) AS kg,
         coalesce(nullIf(mpp.partner_price_idr, 0.), avg_p.avg_daily_price_idr, 0.) AS price
     FROM ad
@@ -401,7 +407,7 @@ price_gw AS (   -- cadangan: rata-rata semua kebun per pekan
 
 -- ===== GRID kebun × pekan (kebun tanpa input tetap punya baris) =====
 weeks AS (
-    SELECT subtractWeeks((SELECT this_monday FROM params), number) AS wk
+    SELECT subtractWeeks((SELECT this_week FROM params), number) AS wk
     FROM numbers(9)
 ),
 -- kebun pelanggan = business yang punya input dalam 180 hari sebelum periode s.d. hari ini (akun mati tidak ikut)

@@ -26,16 +26,26 @@ const WK_CONFIG = {
   // Bagikan deck baru ke semua editor/viewer spreadsheet ini (hanya saat file pertama kali dibuat).
   SHARE_WITH_SHEET_USERS: true,
 
-  // Pekan yang masih berjalan (belum sampai Minggu) tidak dijadikan pekan laporan.
-  EXCLUDE_CURRENT_WEEK: true,
+  // Hari awal pekan: 'auto' = dideteksi dari kolom week_start (hasil query dengan pilihan awal_pekan Senin/Kamis),
+  // atau paksa 'senin' / 'kamis'.
+  WEEK_START_DAY: 'auto',
+  // Pekan berjalan baru dilaporkan bila sudah berjalan minimal sekian hari (hari awal pekan = hari ke-1).
+  // Kurang dari itu, yang dilaporkan adalah pekan SEBELUMNYA (contoh pekan Kamis: Kamis–Minggu -> pekan lalu,
+  // mulai Senin -> pekan berjalan dengan pembanding pekan lalu disetarakan jumlah harinya).
+  MIN_DAYS_CURRENT_WEEK: 5,
+  // Deck stakeholder dibatasi 3 slide isi. true = tambahkan cover & penutup dari template (jadi 5 slide).
+  WITH_COVER_CLOSING: false,
   // Jumlah pekan di grafik & perhitungan tren (termasuk pekan laporan).
   TREND_WEEKS: 8,
   // Minimal pekan berisi data agar tren dihitung; di bawah ini tren = "data kurang".
   MIN_WEEKS_FOR_TREND: 4,
 
-  // Baris tabel per slide (tabel lebih panjang dipecah ke slide lanjutan).
-  ROWS_PER_TABLE: 10,
-  ROWS_PER_FOLLOWUP: 6,
+  // Maksimal baris tabel kebun di slide 3 (sisanya ditulis di speaker notes).
+  ROWS_FOLLOWUP: 6,
+  // Jumlah kartu KPI di slide 1 (dipilih berurutan dari WK_KPI_DEFS yang datanya tersedia).
+  KPI_COUNT: 6,
+  // Samarkan nama kebun (KEBUN_01, ...) di paket data untuk Claude; nama asli dikembalikan saat jawaban dibaca.
+  ANONYMIZE_FOR_AI: true,
 
   // Ambang analisis (berlaku sama untuk semua kebun)
   THRESHOLDS: {
@@ -67,10 +77,12 @@ const WK_CONFIG = {
   TEXT_INSET: { X: 7.2, Y: 3.6 },
   CHAR_W: { BODY: 0.53, HEAVY: 0.6 },
   LAYOUT: {
-    MARGIN: 40.5, RIGHT: 679.5, BODY_TOP: 74.25, BOTTOM: 373,
+    MARGIN: 40.5, RIGHT: 679.5, BODY_TOP: 84, BOTTOM: 373,
+    PERIOD_Y: 62.5,        // baris tanggal pekan laporan vs pembanding, tepat di bawah garis judul
     TITLE: { left: 40.5, top: 22.5, width: 639, height: 27 },
-    CONTENT: { left: 40.5, top: 74.25, width: 415.5, height: 298.75 },
-    INSIGHT: { left: 471.75, top: 74.25 },
+    CONTENT: { left: 40.5, top: 84, width: 415.5, height: 289 },
+    INSIGHT: { left: 471.75, top: 84, width: 207.75, height: 289, pad: 13.5 },
+    TEMPLATE_INSIGHT: { left: 471.75, top: 74.25 },   // posisi kartu INSIGHT bawaan template (dihapus, digambar ulang)
     CARD_PAD: 13.5, CARD_GAP: 10.7
   }
 };

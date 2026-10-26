@@ -11,7 +11,7 @@
 
 // type: date | text | int | num  ·  req: wajib ada di header  ·  group: menentukan warna header
 const WK_COLUMNS = [
-  { key: 'week_start', group: 'id', type: 'date', req: true, note: 'Tanggal Senin awal pekan (yyyy-mm-dd). Tanggal lain otomatis dibulatkan ke Senin pekan itu.' },
+  { key: 'week_start', group: 'id', type: 'date', req: true, note: 'Tanggal awal pekan (yyyy-mm-dd): Senin ATAU Kamis, sesuai pilihan awal_pekan di query. Hari awal pekan dideteksi otomatis dari kolom ini.' },
   { key: 'kebun_id', group: 'id', type: 'text', req: true, note: 'ID unik kebun di KebunPRO (membedakan kebun bernama sama).' },
   { key: 'nama_kebun', group: 'id', type: 'text', req: true, note: 'Nama kebun pelanggan.' },
   { key: 'lokasi', group: 'id', type: 'text', note: 'Lokasi kebun.' },
@@ -140,7 +140,9 @@ function wkValidDate(y, m, d) {
 
 /**
  * Membaca nilai sheet (array 2D) menjadi baris kebun-pekan.
- * Hasil: {rows, errors, warnings, missing (kolom opsional yang tidak ada)}.
+ * Hari awal pekan (Senin, Kamis, atau lainnya) dideteksi dari hari yang paling sering muncul di week_start,
+ * atau dipaksa lewat WK_CONFIG.WEEK_START_DAY; tanggal lain dibulatkan mundur ke hari awal pekan itu.
+ * Hasil: {rows, errors, warnings, missing (kolom opsional yang tidak ada), anchor (0=Minggu ... 1=Senin ... 4=Kamis)}.
  */
 function wkParseValues(values) {
   const out = { rows: [], errors: [], warnings: [], missing: [] };
@@ -164,19 +166,23 @@ function wkParseValues(values) {
     const d = wkDate(row[col.week_start]);
     const id = String(wkBlank(row[col.kebun_id]) ? row[col.nama_kebun] : row[col.kebun_id]).trim();
     if (!d || !id) { out.warnings.push(`Baris ${r + 1} dilewati: week_start atau kebun_id/nama_kebun kosong/tidak terbaca.`); continue; }
-    const week = wkMonday(d);
-    const rec = { sheetRow: r + 1, id, week: wkKey(week), weekDate: week };
+    const rec = { sheetRow: r + 1, id, rawDate: d };
     WK_COLUMNS.forEach(c => {
       if (c.key === 'week_start' || !(c.key in col)) return;
       const v = row[col[c.key]];
       rec[c.key] = c.type === 'text' ? String(wkBlank(v) ? '' : v).trim() : (c.type === 'date' ? wkDate(v) : wkNum(v));
     });
     if (!rec.nama_kebun) rec.nama_kebun = id;
-    const k = `${id}|${rec.week}`;
-    if (seen[k]) out.warnings.push(`Kebun '${rec.nama_kebun}' pekan ${rec.week} muncul lebih dari sekali (baris ${seen[k]} dan ${r + 1}); dipakai baris terakhir.`);
-    seen[k] = r + 1;
     out.rows.push(rec);
   }
+  out.anchor = wkDetectAnchor(out.rows.map(x => x.rawDate));
+  out.rows.forEach(x => {
+    x.weekDate = wkSnapWeek(x.rawDate, out.anchor);
+    x.week = wkKey(x.weekDate);
+    const k = `${x.id}|${x.week}`;
+    if (seen[k]) out.warnings.push(`Kebun '${x.nama_kebun}' pekan ${x.week} muncul lebih dari sekali (baris ${seen[k]} dan ${x.sheetRow}); dipakai baris terakhir.`);
+    seen[k] = x.sheetRow;
+  });
   // baris duplikat: simpan yang terakhir
   const last = {};
   out.rows.forEach(x => { last[`${x.id}|${x.week}`] = x; });
@@ -190,7 +196,22 @@ function wkReadSheet(sheet) { return wkParseValues(sheet.getDataRange().getValue
 /* Utilitas tanggal pekan                                                    */
 /* ------------------------------------------------------------------------- */
 
-function wkMonday(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() - (d.getDay() + 6) % 7); }
+const WK_HARI = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+
+/** Tanggal awal pekan (hari `anchor`, 0=Minggu ... 6=Sabtu) yang memuat tanggal d. */
+function wkSnapWeek(d, anchor) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() - (d.getDay() - anchor + 7) % 7); }
+function wkMonday(d) { return wkSnapWeek(d, 1); }
+
+/** Hari awal pekan: WK_CONFIG.WEEK_START_DAY ('senin'/'kamis'/...) atau hari terbanyak di week_start ('auto'). */
+function wkDetectAnchor(dates) {
+  const forced = String(WK_CONFIG.WEEK_START_DAY || 'auto').trim().toLowerCase();
+  const i = WK_HARI.map(h => h.toLowerCase()).indexOf(forced);
+  if (i >= 0) return i;
+  const count = [0, 0, 0, 0, 0, 0, 0];
+  dates.forEach(d => { count[d.getDay()]++; });
+  const max = Math.max.apply(null, count);
+  return max ? count.indexOf(max) : 1;
+}
 function wkAddDays(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
 function wkKey(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function wkFromKey(k) { const p = k.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); }
