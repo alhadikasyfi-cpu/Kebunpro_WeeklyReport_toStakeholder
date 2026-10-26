@@ -138,7 +138,7 @@ assert.strictEqual(stale, null);
 [null, ai].forEach((aiAns, idx) => {
   ctx.AI = aiAns;
   const specs = run('wkPlanSlides(AN, AI)');
-  assert.strictEqual(specs.length, 3);
+  assert.ok(specs.length >= 3 && specs.length <= 8, `jumlah slide ${specs.length}`);
   console.log(idx ? '\n--- dengan jawaban Claude' : '\n--- teks otomatis');
   specs.forEach(sp => {
     assert.ok(sp.title.length <= 47, `judul terlalu panjang: ${sp.title}`);
@@ -155,6 +155,58 @@ assert.strictEqual(stale, null);
     console.log(`- [${sp.id}] ${sp.title}  (${b.req.length} request)\n    NOTES: ${sp.notes.slice(0, 220)}${sp.notes.length > 220 ? '…' : ''}`);
   });
 });
+// ---- slide temuan: SEMUA kebun & SEMUA temuan dibahas (di tabel atau, bila tidak muat, di speaker notes)
+function checkFindings(an, label) {
+  ctx.AN = an;
+  const pages = run('wkFindingPages(AN)');
+  const specs = run('wkPlanSlides(AN, null)');
+  const fSpecs = specs.filter(s => s.id.indexOf('temuan_') === 0);
+  assert.strictEqual(fSpecs.length, pages.length);
+  assert.ok(pages.length <= Math.max(5, 3), `${label}: slide temuan maks 5 (${pages.length})`);
+  an.kebun.filter(k => k.findings.length).forEach(k => k.findings.forEach(f => {
+    const pg = pages.find(p => p.group.codes.indexOf(f.code) >= 0);
+    assert.ok(pg, `${label}: kelompok untuk ${f.code}`);
+    const shown = pages.some(p => p.rows.concat(p.overflow).some(r => r.k === k && r.findings.indexOf(f) >= 0));
+    assert.ok(shown, `${label}: temuan ${k.name} / ${f.text} tidak dibahas`);
+    const inNotes = fSpecs.some(s => s.notes.indexOf(k.name) >= 0 && s.notes.indexOf(f.text) >= 0);
+    assert.ok(inNotes, `${label}: speaker notes tidak memuat ${k.name} / ${f.text}`);
+  }));
+  fSpecs.forEach(sp => {
+    assert.ok(sp.title.length <= 47, `judul terlalu panjang: ${sp.title}`);
+    const b = new ctx.WkBatch('p1');
+    sp.draw(b);
+    b.req.filter(r => r.createShape || r.createTable).forEach(r => {
+      const ep = (r.createShape || r.createTable).elementProperties, y = ep.transform.translateY, h = ep.size.height.magnitude;
+      assert.ok(y + h <= 385, `[${sp.id}] keluar bawah slide`);
+    });
+    const est = run(`wkFindingPages(AN).find(p => p.id === '${sp.id}')`);
+    const tableBottom = 124 + 28 + est.rows.reduce((a, r) => a + run('wkFindingRowHeight')(r.cells), 0);
+    assert.ok(tableBottom <= 373, `[${sp.id}] perkiraan tabel melewati batas bawah (${tableBottom.toFixed(0)} pt)`);
+  });
+  console.log(`\n${label}: ${pages.length} slide temuan`);
+  fSpecs.forEach(sp => {
+    const pg = pages.find(p => p.id === sp.id);
+    console.log(`- [${sp.id}] ${sp.title} · ${pg.rows.length} baris${pg.overflow.length ? ` + ${pg.overflow.length} di notes` : ''}`);
+  });
+  return fSpecs;
+}
+const fs1 = checkFindings(A, 'Data contoh 6 kebun');
+console.log('  INSIGHT:', fs1[0].draw && run(`wkAutoFindingTexts(AN, wkFindingPages(AN)[0]).insight`));
+
+// data besar: 40 kebun, banyak temuan -> halaman dibatasi, sisanya di speaker notes
+{
+  const big = [];
+  for (let i = 0; i < 40; i++) {
+    const base = kebun[i % kebun.length];
+    big.push(Object.assign({}, base, { id: `B${String(i).padStart(2, '0')}`, nama: `${base.nama} Blok Ekspansi ${i + 1}` }));
+  }
+  const saved = kebun.splice(0, kebun.length, ...big);
+  const { an } = analyze(makeValues(new Date(2026, 8, 3), 7, 4), new Date(2026, 10, 1));
+  checkFindings(an, 'Data besar 40 kebun');
+  kebun.splice(0, kebun.length, ...saved);
+}
+ctx.AN = A;
+
 const auto = run('wkAutoTexts(AN)');
 console.log('\nINSIGHT otomatis:\n' + ['ringkasan', 'tren', 'tindak'].map(id => `- ${id}: ${auto[id].insight}`).join('\n'));
 console.log('\nSemua uji lulus.');

@@ -1,10 +1,10 @@
 # Weekly Report KebunPRO untuk Stakeholder
 
-Apps Script yang membuat **deck mingguan 3 slide** untuk stakeholder internal SawitPRO, yang waktunya sangat sedikit. Deck ini merangkum kesehatan pelanggan KebunPRO, yaitu estate owner, selama satu pekan. Hampir setiap angka dibandingkan dengan **pekan lalu (dalam %)** dan dilengkapi **tren pekan per pekan**.
+Apps Script yang membuat **deck mingguan: 3 slide ringkasan + 2–5 slide temuan & tindak lanjut** untuk stakeholder internal SawitPRO, yang waktunya sangat sedikit. Deck ini merangkum kesehatan pelanggan KebunPRO, yaitu estate owner, selama satu pekan. Hampir setiap angka dibandingkan dengan **pekan lalu (dalam %)** dan dilengkapi **tren pekan per pekan**.
 
 Template slide-nya sama dengan Monthly Report. Deck weekly adalah **satu file tetap**: generate pertama membuat file baru, lalu generate berikutnya mengganti isi file yang sama, jadi link-nya tidak berubah.
 
-## Isi deck (3 slide)
+## Isi deck
 
 Setiap slide memuat baris tanggal pekan laporan vs pekan pembanding, kartu INSIGHT, dan speaker notes.
 
@@ -13,6 +13,7 @@ Setiap slide memuat baris tanggal pekan laporan vs pekan pembanding, kartu INSIG
 | 1. Ringkasan pekan | 6 kartu KPI. Setiap kartu berisi nilai pekan ini, **% perubahan vs pekan lalu**, grafik mini 8 pekan, dan angka pekan lalu. Prioritas KPI: kebun aktif input, akun aktif, kebun berisiko, perpanjangan ≤30 hari, TBS tercatat, nilai penjualan TBS, lalu hari input per kebun, catatan, dan % janjang tanpa berat (KPI yang datanya kosong dilewati). |
 | 2. Tren pekan per pekan | 4 grafik kecil 8 pekan: kebun aktif, akun aktif, TBS, kebun berisiko. Setiap grafik menampilkan % vs pekan lalu. |
 | 3. Kebun perlu tindak lanjut | Maks. 6 kebun prioritas: status, % perubahan hari input dan TBS, temuan utama, tindak lanjut + PIC (CS / Sales / Agronomi). Sisanya ditulis di speaker notes. |
+| 4–8. Temuan & tindak lanjut (2–5 slide) | **Semua** kebun yang punya temuan, beserta **semua** temuan dan tindak lanjutnya. Dikelompokkan per tema supaya tiap tim tahu tugasnya: **Keaktifan & risiko churn** (tidak input, input jarang, akun pasif, langganan hampir habis; PIC CS/Sales), **Kualitas pencatatan** (janjang tanpa berat, janjang belum terjual, BJR tidak wajar, blok tanpa luas; PIC CS/Agronomi), **Produksi TBS** (turun tajam). Setiap slide berisi pita INSIGHT dan tabel kebun, status, semua temuan, tindak lanjut + PIC, serta target (berisiko = pekan ini, perlu perhatian = ≤ 2 pekan). Tabel yang panjang otomatis lanjut ke slide berikutnya, maksimal `MAX_FINDING_SLIDES` (5). Kebun yang tetap tidak muat ditulis "+N kebun lain" dan dibahas di speaker notes. Kelompok tanpa temuan tidak dibuatkan slide. |
 
 ## Pekan Senin atau Kamis
 

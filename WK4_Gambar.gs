@@ -271,3 +271,11 @@ function wkStatusColor(txt) {
   if (txt === WK_STATUS.SEHAT) return C.GREEN;
   return null;
 }
+
+/** Pita ringkasan lebar penuh (INSIGHT slide temuan) di bawah baris tanggal; teks dengan **tebal**, maks ±2 baris. */
+function wkDrawStrip(b, text, top, height) {
+  const C = WK_CONFIG.COLOR, T = WK_CONFIG.TYPE, L = WK_CONFIG.LAYOUT, P = 9, W = L.RIGHT - L.MARGIN;
+  b.rect(L.MARGIN, top, W, height, { round: true, fill: C.TINT, border: C.BORDER });
+  b.text('', L.MARGIN + P, top + 5, W - 2 * P, height - 10, { segs: [{ text: 'INSIGHT  ', size: T.CAPTION, weight: WK_CONFIG.WEIGHT.HEAVY, color: C.GREEN }]
+    .concat(wkBoldSegs(text, T.BODY, C.INK)), valign: 'MIDDLE', lineSpacing: 125 });
+}

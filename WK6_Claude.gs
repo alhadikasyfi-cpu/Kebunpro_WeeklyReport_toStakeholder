@@ -10,7 +10,7 @@
 
 // Sel jawaban Claude di sheet tabel weekly (WK_CONFIG.SHEET_NAME). Harus di LUAR tabel data (kolom A–AE).
 const WK_AI_CELL = 'AF2';
-const WK_AI_LIMITS = { TITLE: 47, INSIGHT_SIDE: 420, INSIGHT_WIDE: 330, NOTES: 1400 };
+const WK_AI_LIMITS = { TITLE: 47, INSIGHT_SIDE: 420, INSIGHT_WIDE: 330, INSIGHT_FINDING: 210, NOTES: 1400, NOTES_FINDING: 2400 };
 const WK_SLIDE_IDS = ['ringkasan', 'tren', 'tindak'];
 
 /* ------------------------------------------------------------------------- */
@@ -71,6 +71,15 @@ function wkPacketData(an) {
   tl.slice(0, 25).forEach(k => L.push(`${nm(k)} | ${k.status} | ${wkFmt(k.cur ? k.cur.hari : 0)} (${k.dHari.txt}) | ${wkFmtAuto(k.cur ? k.cur.ton : 0)} (${k.dTon.txt}) | ${k.findings.map(f => f.text).join('; ')} | ${k.tindak}`));
   if (tl.length > 25) L.push(`... dan ${tl.length - 25} kebun lain.`);
   L.push('');
+  const fp = wkFindingPages(an);
+  if (fp.length) {
+    L.push(`[SLIDE TEMUAN & TINDAK LANJUT] ${fp.length} slide, SEMUA kebun dengan temuan, dikelompokkan per tema. Format baris: kebun | status | semua temuan | tindak lanjut (PIC) | target`);
+    fp.forEach(pg => {
+      L.push(`-- id "${pg.id}": ${pg.group.name}, halaman ${pg.page}/${pg.pages} (kelompok ini total ${pg.total} kebun, ${pg.risiko} berisiko)`);
+      pg.rows.concat(pg.overflow).forEach(r => L.push(`${nm(r.k)} | ${r.k.status} | ${r.findings.map(f => f.text).join('; ')} | ${r.actions.join('; ')} | ${r.target}`));
+    });
+    L.push('');
+  }
   const mv = wkMovers(an);
   L.push('[PENGGERAK PEKAN INI]');
   L.push('TBS naik terbesar: ' + (mv.up.map(k => `${nm(k)} ${k.dTon.txt}`).join(', ') || '-'));
@@ -85,7 +94,7 @@ function wkBuildPacket(an) {
   const id = wkHash(data);
   const guide = [
     'Kamu analis bisnis di SawitPRO, perusahaan SaaS penyedia aplikasi KebunPRO untuk manajemen kebun sawit. Pelanggan kami adalah estate owner (pemilik kebun besar).',
-    'Tugasmu menulis teks deck WEEKLY REPORT 3 slide untuk STAKEHOLDER INTERNAL SawitPRO (manajemen) yang sangat sibuk: mereka hanya punya beberapa detik per slide.',
+    'Tugasmu menulis teks deck WEEKLY REPORT untuk STAKEHOLDER INTERNAL SawitPRO (manajemen) yang sangat sibuk: 3 slide ringkasan (beberapa detik per slide), lalu slide temuan & tindak lanjut untuk SEMUA kebun yang bermasalah.',
     'Yang mereka perlu tahu cepat: apakah pelanggan makin aktif memakai produk (adopsi), pelanggan mana yang berisiko berhenti/churn atau perlu perpanjangan, nilai yang dikelola pelanggan lewat platform, dan tindakan apa yang harus dilakukan tim pekan ini.',
     '',
     'ATURAN:',
@@ -99,14 +108,16 @@ function wkBuildPacket(an) {
     '1. id "ringkasan": kartu KPI utama (pekan ini vs pekan lalu + tren mini 8 pekan). Judul = kesimpulan terpenting pekan ini.',
     '2. id "tren": grafik kecil 8 pekan (kebun aktif, akun aktif, TBS tercatat, kebun berisiko). Judul = arah tren yang paling penting.',
     '3. id "tindak": tabel kebun yang perlu tindak lanjut (status, perubahan, temuan, tindakan + PIC). Judul = jumlah/prioritas tindak lanjut.',
+    '4+. id "temuan_..." (lihat bagian SLIDE TEMUAN & TINDAK LANJUT di data): tabel semua temuan dan tindak lanjut per kelompok tema. Judul = jumlah kebun + inti masalah kelompok itu; insight = pola temuan + kebun yang harus ditangani pekan ini; speaker_notes = bahas SETIAP kebun di slide itu (temuan, tindakan, PIC, target), juga kebun tambahan yang tertulis di kelompok itu tetapi tidak muat di tabel.',
     '',
     'ISI TIAP SLIDE:',
     `- title: jawaban, bukan nama topik, maks ${WK_AI_LIMITS.TITLE} karakter termasuk spasi, satu angka kunci, tanpa titik di akhir.`,
-    `- insight: tampil di slide. Slide 1 dan 2: 2–3 kalimat (maks ${WK_AI_LIMITS.INSIGHT_SIDE} karakter); slide 3: 2 kalimat (maks ${WK_AI_LIMITS.INSIGHT_WIDE} karakter). Tebalkan 1–2 angka kunci dengan **...**. Kalimat terakhir = artinya bagi bisnis / apa yang harus dilakukan.`,
+    `- insight: tampil di slide. Slide 1 dan 2: 2–3 kalimat (maks ${WK_AI_LIMITS.INSIGHT_SIDE} karakter); slide 3: 2 kalimat (maks ${WK_AI_LIMITS.INSIGHT_WIDE} karakter); slide temuan: 1–2 kalimat pendek (maks ${WK_AI_LIMITS.INSIGHT_FINDING} karakter). Tebalkan 1–2 angka kunci dengan **...**. Kalimat terakhir = artinya bagi bisnis / apa yang harus dilakukan.`,
     '- speaker_notes: 100–170 kata untuk presenter: apa yang terlihat (angka + % vs pekan lalu + tren), mengapa, dampaknya bagi bisnis SaaS (adopsi, churn, perpanjangan), dan keputusan/tindakan yang diminta dari stakeholder. Teks polos tanpa **.',
     '',
     'FORMAT JAWABAN (WAJIB): satu blok kode berisi SATU objek JSON dalam SATU BARIS (tanpa baris baru), tanpa tanda kutip ganda di dalam teks (pakai kutip tunggal):',
-    `{"packet_id":"${id}","slides":[{"id":"ringkasan","title":"...","insight":"...","speaker_notes":"..."},{"id":"tren","title":"...","insight":"...","speaker_notes":"..."},{"id":"tindak","title":"...","insight":"...","speaker_notes":"..."}]}`,
+    `{"packet_id":"${id}","slides":[${wkSlideIds(an).map(x => `{"id":"${x}","title":"...","insight":"...","speaker_notes":"..."}`).join(',')}]}`,
+    `Tulis SEMUA ${wkSlideIds(an).length} slide di atas, berurutan.`,
     `Setelah blok kode, tulis satu kalimat: "Tempel ke sel ${WK_AI_CELL} sheet ${WK_CONFIG.SHEET_NAME}."`
   ].join('\n');
   return { id, text: `=== PAKET DATA WEEKLY KEBUNPRO ===\nID_PAKET: ${id}\n\n${guide}\n\n${data}\n=== AKHIR PAKET ===` };
@@ -174,19 +185,21 @@ function wkReadAiAnswer(raw, an, warnings) {
     warnings.push(`Jawaban Claude untuk data lain (ID_PAKET ${obj.packet_id || '-'} ≠ ${id}). Data sudah berubah: salin paket baru ke Claude. Teks otomatis dipakai.`);
     return null;
   }
-  const out = {};
+  const out = {}, ids = wkSlideIds(an);
   obj.slides.forEach(sl => {
     const sid = String(sl.id || '').trim().toLowerCase();
-    if (WK_SLIDE_IDS.indexOf(sid) < 0) return;
+    if (ids.indexOf(sid) < 0) return;
+    const isFinding = sid.indexOf('temuan_') === 0;
     const title = wkStripBold(wkRestoreNames(sl.title, an)).trim().replace(/\.$/, '');
     out[sid] = {
       title: title && title.length <= WK_AI_LIMITS.TITLE ? title : null,
-      insight: wkCutSentence(wkRestoreNames(sl.insight, an), sid === 'tindak' ? WK_AI_LIMITS.INSIGHT_WIDE : WK_AI_LIMITS.INSIGHT_SIDE) || null,
-      notes: wkCutSentence(wkStripBold(wkRestoreNames(sl.speaker_notes, an)), WK_AI_LIMITS.NOTES) || null
+      insight: wkCutSentence(wkRestoreNames(sl.insight, an), isFinding ? WK_AI_LIMITS.INSIGHT_FINDING
+        : (sid === 'tindak' ? WK_AI_LIMITS.INSIGHT_WIDE : WK_AI_LIMITS.INSIGHT_SIDE)) || null,
+      notes: wkCutSentence(wkStripBold(wkRestoreNames(sl.speaker_notes, an)), isFinding ? WK_AI_LIMITS.NOTES_FINDING : WK_AI_LIMITS.NOTES) || null
     };
     if (title && title.length > WK_AI_LIMITS.TITLE) warnings.push(`Judul Claude slide '${sid}' lebih dari ${WK_AI_LIMITS.TITLE} karakter; diganti judul otomatis.`);
   });
-  const missing = WK_SLIDE_IDS.filter(x => !out[x]);
+  const missing = ids.filter(x => !out[x]);
   if (missing.length) warnings.push(`Jawaban Claude tidak memuat slide: ${missing.join(', ')}; bagian itu memakai teks otomatis.`);
   return out;
 }
@@ -214,3 +227,85 @@ function wkMovers(an) {
     started: an.kebun.filter(k => !isAct(k.prev) && isAct(k.cur))
   };
 }
+
+/* ------------------------------------------------------------------------- */
+/* Slide temuan & tindak lanjut (semua kebun, dikelompokkan per tema)        */
+/* ------------------------------------------------------------------------- */
+
+// Kelompok temuan = siapa yang bergerak: keaktifan/churn (CS, Sales), pencatatan (CS, Agronomi), produksi.
+const WK_FINDING_GROUPS = [
+  { id: 'aktif', name: 'Keaktifan & risiko churn', codes: ['tanpa_input', 'input_jarang', 'akun_pasif', 'langganan'],
+    title: (n, r) => `${n} kebun: keaktifan & churn${r ? `, ${r} berisiko` : ''}` },
+  { id: 'data', name: 'Kualitas pencatatan data', codes: ['tanpa_berat', 'kebocoran', 'bjr', 'blok_luas'],
+    title: n => `${n} kebun perlu perbaikan pencatatan` },
+  { id: 'produksi', name: 'Produksi TBS', codes: ['tbs_turun'],
+    title: n => `${n} kebun TBS turun >${WK_CONFIG.THRESHOLDS.TBS_TURUN_PCT}% dari pekan lalu` }
+];
+// Tabel slide temuan: kolom & lebar relatif (dipakai juga untuk memperkirakan tinggi baris saat membagi halaman)
+const WK_FINDING_COLS = { head: ['Kebun', 'Status', 'Semua temuan pekan ini', 'Tindak lanjut · PIC', 'Target'], widths: [1.7, 1.1, 3.7, 3.5, 1.0] };
+
+/** Baris tabel temuan satu kebun dalam satu kelompok: semua temuan + semua tindakan (unik) + target. */
+function wkFindingRow(k, findings) {
+  const seen = {};
+  const actions = findings.map(f => WK_TINDAK[f.code]).filter(t => !seen[t.aksi] && (seen[t.aksi] = true))
+    .map(t => `${t.aksi} (PIC: ${t.pic})`);
+  const urgent = findings.some(f => f.sev === 'risiko') || k.status === WK_STATUS.RISIKO;
+  return { k, findings, actions, target: urgent ? WK_CONFIG.FINDING_TARGET.risiko : WK_CONFIG.FINDING_TARGET.perhatian,
+    cells: [k.name, k.status, findings.map(f => f.text).join('; '), actions.join('; '), urgent ? WK_CONFIG.FINDING_TARGET.risiko : WK_CONFIG.FINDING_TARGET.perhatian] };
+}
+
+/** Perkiraan tinggi baris tabel temuan (pt) dari teks terpanjang di kolom yang bisa terlipat. */
+function wkFindingRowHeight(cells) {
+  const W = WK_CONFIG.LAYOUT.RIGHT - WK_CONFIG.LAYOUT.MARGIN, size = WK_CONFIG.TYPE.TABLE_CELL_MIN;
+  const sum = WK_FINDING_COLS.widths.reduce((a, b) => a + b, 0);
+  const lines = Math.max.apply(null, cells.map((c, i) => wkEstLines(c, size, W * WK_FINDING_COLS.widths[i] / sum - 10, i < 2)));
+  return Math.max(26, lines * size * 1.25 + 10);
+}
+
+/**
+ * Halaman slide temuan: [{id, group, page, pages, rows, overflow, total, risiko}].
+ * Kebun dibagi per kelompok, baris diisi sampai tinggi tabel penuh; total halaman dibatasi MAX_FINDING_SLIDES
+ * (kebun yang tidak muat ditulis sebagai "+N kebun lain" dan dirinci di speaker notes).
+ */
+function wkFindingPages(an) {
+  const L = WK_CONFIG.LAYOUT;
+  const avail = L.BOTTOM - L.FINDING_TABLE_TOP - 28 - 16;   // header tabel + baris keterangan "+N kebun lain"
+  const tl = wkFollowupList(an);
+  const groups = WK_FINDING_GROUPS.map(g => {
+    const rows = tl.map(k => ({ k, f: k.findings.filter(x => g.codes.indexOf(x.code) >= 0) })).filter(x => x.f.length)
+      .map(x => wkFindingRow(x.k, x.f));
+    const chunks = [];
+    let cur = [], h = 0;
+    rows.forEach(r => {
+      const rh = wkFindingRowHeight(r.cells);
+      if (cur.length && h + rh > avail) { chunks.push(cur); cur = []; h = 0; }
+      cur.push(r); h += rh;
+    });
+    if (cur.length) chunks.push(cur);
+    return { g, rows, chunks };
+  }).filter(x => x.rows.length);
+  // batasi total halaman: buang dulu halaman terakhir yang barisnya paling sedikit (paling sedikit kebun pindah ke
+  // speaker notes), minimal 1 halaman per kelompok
+  const max = Math.max(WK_CONFIG.MAX_FINDING_SLIDES, groups.length);
+  const need = groups.map(x => x.chunks.length);
+  while (need.reduce((a, b) => a + b, 0) > max) {
+    let pick = -1;
+    groups.forEach((x, i) => {
+      if (need[i] > 1 && (pick < 0 || x.chunks[need[i] - 1].length < groups[pick].chunks[need[pick] - 1].length)) pick = i;
+    });
+    if (pick < 0) break;
+    need[pick]--;
+  }
+  const pages = [];
+  groups.forEach((x, gi) => {
+    const kept = x.chunks.slice(0, need[gi]);
+    const overflow = [].concat.apply([], x.chunks.slice(need[gi]));
+    kept.forEach((rows, p) => pages.push({ id: `temuan_${x.g.id}_${p + 1}`, group: x.g, page: p + 1, pages: kept.length, rows,
+      overflow: p === kept.length - 1 ? overflow : [], total: x.rows.length,
+      risiko: x.rows.filter(r => r.k.status === WK_STATUS.RISIKO).length, allRows: x.rows }));
+  });
+  return pages;
+}
+
+/** Semua id slide yang bisa diisi Claude, berurutan. */
+function wkSlideIds(an) { return WK_SLIDE_IDS.concat(wkFindingPages(an).map(p => p.id)); }

@@ -253,7 +253,7 @@ function wkPlanSlides(an, ai) {
   } });
 
   // 3. Kebun perlu tindak lanjut (tabel lebar penuh + INSIGHT di bawah)
-  const tl = wkFollowupList(an);
+  const tl = wkFollowupList(an), fpages = wkFindingPages(an);
   const rows = (tl.length ? tl : an.kebun.slice().sort((a, b) => Math.abs(b.dTon.pct || 0) - Math.abs(a.dTon.pct || 0)))
     .slice(0, WK_CONFIG.ROWS_FOLLOWUP);
   specs.push({ id: 'tindak', title: text('tindak', 'title'), notes: text('tindak', 'notes'), draw: b => {
@@ -273,13 +273,57 @@ function wkPlanSlides(an, ai) {
       Math.max.apply(null, [0, 4, 5].map(i => wkEstLines(row[i], T.TABLE_CELL_MIN, colW(i), i === 0))) * T.TABLE_CELL_MIN * 1.25 + 10), 0);
     const more = tl.length - rows.length;
     if (more > 0) {
-      b.text(`+${more} kebun lain perlu perhatian (rincian di speaker notes)`, L.MARGIN, y + 3, W, 11, { size: T.CAPTION, color: WK_CONFIG.COLOR.MUTED });
+      b.text(`+${more} kebun lain perlu perhatian; semua temuan dan tindak lanjut dirinci di slide ${wkSlideRange(4, fpages.length)}`, L.MARGIN, y + 3, W, 11, { size: T.CAPTION, color: WK_CONFIG.COLOR.MUTED });
       y += 15;
     }
     const top = y + 8;
     if (L.BOTTOM - top >= 40) wkDrawInsightCard(b, text('tindak', 'insight'), L.MARGIN, top, W, L.BOTTOM - top);
   } });
+
+  // 4+. Temuan & tindak lanjut SEMUA kebun, per kelompok (keaktifan & churn, pencatatan, produksi)
+  fpages.forEach(pg => {
+    const at = wkAutoFindingTexts(an, pg);
+    const ft = key => (ai && ai[pg.id] && ai[pg.id][key]) || at[key];
+    specs.push({ id: pg.id, title: ft('title'), notes: ft('notes'), draw: b => {
+      wkDrawPeriod(b, period);
+      wkDrawStrip(b, ft('insight'), L.BODY_TOP, L.FINDING_TABLE_TOP - L.BODY_TOP - 8);
+      const W = L.RIGHT - L.MARGIN, T = WK_CONFIG.TYPE;
+      b.table(L.MARGIN, L.FINDING_TABLE_TOP, W, [WK_FINDING_COLS.head].concat(pg.rows.map(r => r.cells)),
+        { colWidths: WK_FINDING_COLS.widths, fontSize: T.TABLE_CELL_MIN, rowHeight: 26,
+          cellColor: (r, c, t) => (c === 1 ? wkStatusColor(t) : (c === 4 && t === WK_CONFIG.FINDING_TARGET.risiko ? WK_CONFIG.COLOR.DANGER : null)) });
+      if (pg.overflow.length) {
+        const y = L.FINDING_TABLE_TOP + 28 + pg.rows.reduce((a, r) => a + wkFindingRowHeight(r.cells), 0) + 3;
+        b.text(`+${pg.overflow.length} kebun lain di kelompok ini (${pg.overflow.slice(0, 4).map(r => r.k.name).join(', ')}${pg.overflow.length > 4 ? ', …' : ''}): rincian di speaker notes`,
+          L.MARGIN, Math.min(y, L.BOTTOM - 11), W, 11, { size: T.CAPTION, color: WK_CONFIG.COLOR.MUTED });
+      }
+    } });
+  });
   return specs;
+}
+
+/** "4–6" untuk slide isi ke-4 s.d. ke-6 (bergeser 1 bila cover ditampilkan). */
+function wkSlideRange(first, count) {
+  const a = first + (WK_CONFIG.WITH_COVER_CLOSING ? 1 : 0);
+  return count > 1 ? `${a}–${a + count - 1}` : String(a);
+}
+
+/** Teks otomatis slide temuan satu halaman (dipakai bila jawaban Claude tidak memuat slide ini). */
+function wkAutoFindingTexts(an, pg) {
+  const fit = (t, alt) => (t.length <= WK_AI_LIMITS.TITLE ? t : alt);
+  const suffix = pg.pages > 1 ? ` (${pg.page}/${pg.pages})` : '';
+  const title = fit(pg.group.title(pg.total, pg.risiko) + suffix, fit(`${pg.group.name}: ${pg.total} kebun${suffix}`, pg.group.name + suffix));
+  // jumlah kebun per jenis temuan di kelompok ini
+  const count = {};
+  pg.allRows.forEach(r => r.findings.forEach(f => { count[f.code] = (count[f.code] || 0) + 1; }));
+  const parts = Object.keys(count).sort((a, b) => count[b] - count[a]).map(c => `${count[c]} ${WK_TINDAK[c].label}`);
+  const urgent = pg.allRows.filter(r => r.target === WK_CONFIG.FINDING_TARGET.risiko);
+  const insight = `**${pg.total} kebun** dengan temuan ${pg.group.name.toLowerCase()}: ${parts.join(', ')}. ` +
+    (urgent.length ? `Tindak lanjut pekan ini: ${urgent.slice(0, 3).map(r => `**${r.k.name}**`).join(', ')}${urgent.length > 3 ? ` dan ${urgent.length - 3} lainnya` : ''}.`
+      : 'Tidak ada yang berisiko; tindak lanjut dalam 2 pekan.');
+  const line = r => `${r.k.name} (${r.k.status}): ${r.findings.map(f => f.text).join('; ')}. Tindak lanjut: ${r.actions.join('; ')}. Target: ${r.target}.`;
+  const notes = `${pg.group.name}, pekan ${an.labelLaporan}. ` + pg.rows.map(line).join(' ') +
+    (pg.overflow.length ? ` Kebun lain di kelompok ini: ${pg.overflow.map(line).join(' ')}` : '');
+  return { title, insight, notes };
 }
 
 /* ------------------------------------------------------------------------- */
