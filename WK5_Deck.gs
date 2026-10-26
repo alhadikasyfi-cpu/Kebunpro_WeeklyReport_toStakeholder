@@ -280,7 +280,7 @@ function wkPlanSlides(an, ai) {
     if (L.BOTTOM - top >= 40) wkDrawInsightCard(b, text('tindak', 'insight'), L.MARGIN, top, W, L.BOTTOM - top);
   } });
 
-  // 4+. Temuan & tindak lanjut SEMUA kebun, per kelompok (keaktifan & churn, pencatatan, produksi)
+  // 4+. Temuan & tindak lanjut SEMUA bisnis: satu baris per bisnis, tabel panjang dilanjutkan ke slide berikutnya
   fpages.forEach(pg => {
     const at = wkAutoFindingTexts(an, pg);
     const ft = key => (ai && ai[pg.id] && ai[pg.id][key]) || at[key];
@@ -293,7 +293,7 @@ function wkPlanSlides(an, ai) {
           cellColor: (r, c, t) => (c === 1 ? wkStatusColor(t) : (c === 4 && t === WK_CONFIG.FINDING_TARGET.risiko ? WK_CONFIG.COLOR.DANGER : null)) });
       if (pg.overflow.length) {
         const y = L.FINDING_TABLE_TOP + 28 + pg.rows.reduce((a, r) => a + wkFindingRowHeight(r.cells), 0) + 3;
-        b.text(`+${pg.overflow.length} kebun lain di kelompok ini (${pg.overflow.slice(0, 4).map(r => r.k.name).join(', ')}${pg.overflow.length > 4 ? ', …' : ''}): rincian di speaker notes`,
+        b.text(`+${pg.overflow.length} bisnis lain (${pg.overflow.slice(0, 4).map(r => r.k.name).join(', ')}${pg.overflow.length > 4 ? ', …' : ''}): rincian di speaker notes`,
           L.MARGIN, Math.min(y, L.BOTTOM - 11), W, 11, { size: T.CAPTION, color: WK_CONFIG.COLOR.MUTED });
       }
     } });
@@ -311,18 +311,19 @@ function wkSlideRange(first, count) {
 function wkAutoFindingTexts(an, pg) {
   const fit = (t, alt) => (t.length <= WK_AI_LIMITS.TITLE ? t : alt);
   const suffix = pg.pages > 1 ? ` (${pg.page}/${pg.pages})` : '';
-  const title = fit(pg.group.title(pg.total, pg.risiko) + suffix, fit(`${pg.group.name}: ${pg.total} kebun${suffix}`, pg.group.name + suffix));
-  // jumlah kebun per jenis temuan di kelompok ini
+  const title = fit(pg.group.title(pg.total, pg.risiko) + suffix, fit(`${pg.total} bisnis perlu tindak lanjut${suffix}`, 'Temuan & tindak lanjut' + suffix));
+  // jumlah bisnis per jenis temuan
   const count = {};
   pg.allRows.forEach(r => r.findings.forEach(f => { count[f.code] = (count[f.code] || 0) + 1; }));
   const parts = Object.keys(count).sort((a, b) => count[b] - count[a]).map(c => `${count[c]} ${WK_TINDAK[c].label}`);
-  const urgent = pg.allRows.filter(r => r.target === WK_CONFIG.FINDING_TARGET.risiko);
-  const insight = `**${pg.total} kebun** dengan temuan ${pg.group.name.toLowerCase()}: ${parts.join(', ')}. ` +
+  // bisnis yang harus ditangani pekan ini: dari halaman ini (tiap halaman menyebut bisnis di tabelnya sendiri)
+  const urgent = pg.rows.filter(r => r.target === WK_CONFIG.FINDING_TARGET.risiko);
+  const insight = wkCutSentence(`**${pg.total} bisnis** punya temuan pekan ini: ${parts.join(', ')}. ` +
     (urgent.length ? `Tindak lanjut pekan ini: ${urgent.slice(0, 3).map(r => `**${r.k.name}**`).join(', ')}${urgent.length > 3 ? ` dan ${urgent.length - 3} lainnya` : ''}.`
-      : 'Tidak ada yang berisiko; tindak lanjut dalam 2 pekan.');
+      : 'Tidak ada yang berisiko di halaman ini; tindak lanjut dalam 2 pekan.'), WK_AI_LIMITS.INSIGHT_FINDING);
   const line = r => `${r.k.name} (${r.k.status}): ${r.findings.map(f => f.text).join('; ')}. Tindak lanjut: ${r.actions.join('; ')}. Target: ${r.target}.`;
-  const notes = `${pg.group.name}, pekan ${an.labelLaporan}. ` + pg.rows.map(line).join(' ') +
-    (pg.overflow.length ? ` Kebun lain di kelompok ini: ${pg.overflow.map(line).join(' ')}` : '');
+  const notes = `Temuan dan tindak lanjut per bisnis, pekan ${an.labelLaporan}${pg.pages > 1 ? `, halaman ${pg.page} dari ${pg.pages}` : ''}. ` +
+    pg.rows.map(line).join(' ') + (pg.overflow.length ? ` Bisnis lain yang tidak muat di tabel: ${pg.overflow.map(line).join(' ')}` : '');
   return { title, insight, notes };
 }
 

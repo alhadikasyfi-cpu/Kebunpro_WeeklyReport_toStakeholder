@@ -164,13 +164,16 @@ function checkFindings(an, label) {
   assert.strictEqual(fSpecs.length, pages.length);
   assert.ok(pages.length <= Math.max(5, 3), `${label}: slide temuan maks 5 (${pages.length})`);
   an.kebun.filter(k => k.findings.length).forEach(k => k.findings.forEach(f => {
-    const pg = pages.find(p => p.group.codes.indexOf(f.code) >= 0);
+    const pg = pages.find(p => !p.group.codes || p.group.codes.indexOf(f.code) >= 0);
     assert.ok(pg, `${label}: kelompok untuk ${f.code}`);
     const shown = pages.some(p => p.rows.concat(p.overflow).some(r => r.k === k && r.findings.indexOf(f) >= 0));
     assert.ok(shown, `${label}: temuan ${k.name} / ${f.text} tidak dibahas`);
     const inNotes = fSpecs.some(s => s.notes.indexOf(k.name) >= 0 && s.notes.indexOf(f.text) >= 0);
     assert.ok(inNotes, `${label}: speaker notes tidak memuat ${k.name} / ${f.text}`);
   }));
+  const listed = [].concat.apply([], pages.map(p => p.rows.concat(p.overflow))).map(r => r.k.id);
+  assert.strictEqual(listed.length, new Set(listed).size, `${label}: bisnis muncul lebih dari sekali`);
+  assert.strictEqual(listed.length, an.kebun.filter(k => k.findings.length).length, `${label}: tidak semua bisnis bertemuan dibahas`);
   fSpecs.forEach(sp => {
     assert.ok(sp.title.length <= 47, `judul terlalu panjang: ${sp.title}`);
     const b = new ctx.WkBatch('p1');

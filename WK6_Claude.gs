@@ -73,9 +73,9 @@ function wkPacketData(an) {
   L.push('');
   const fp = wkFindingPages(an);
   if (fp.length) {
-    L.push(`[SLIDE TEMUAN & TINDAK LANJUT] ${fp.length} slide, SEMUA kebun dengan temuan, dikelompokkan per tema. Format baris: kebun | status | semua temuan | tindak lanjut (PIC) | target`);
+    L.push(`[SLIDE TEMUAN & TINDAK LANJUT PER BISNIS] ${fp.length} slide, SEMUA bisnis dengan temuan, satu baris per bisnis. Format baris: bisnis | status | semua temuan | tindak lanjut (PIC) | target`);
     fp.forEach(pg => {
-      L.push(`-- id "${pg.id}": ${pg.group.name}, halaman ${pg.page}/${pg.pages} (kelompok ini total ${pg.total} kebun, ${pg.risiko} berisiko)`);
+      L.push(`-- id "${pg.id}": halaman ${pg.page}/${pg.pages} (total ${pg.total} bisnis, ${pg.risiko} berisiko)`);
       pg.rows.concat(pg.overflow).forEach(r => L.push(`${nm(r.k)} | ${r.k.status} | ${r.findings.map(f => f.text).join('; ')} | ${r.actions.join('; ')} | ${r.target}`));
     });
     L.push('');
@@ -94,7 +94,7 @@ function wkBuildPacket(an) {
   const id = wkHash(data);
   const guide = [
     'Kamu analis bisnis di SawitPRO, perusahaan SaaS penyedia aplikasi KebunPRO untuk manajemen kebun sawit. Pelanggan kami adalah estate owner (pemilik kebun besar).',
-    'Tugasmu menulis teks deck WEEKLY REPORT untuk STAKEHOLDER INTERNAL SawitPRO (manajemen) yang sangat sibuk: 3 slide ringkasan (beberapa detik per slide), lalu slide temuan & tindak lanjut untuk SEMUA kebun yang bermasalah.',
+    'Tugasmu menulis teks deck WEEKLY REPORT untuk STAKEHOLDER INTERNAL SawitPRO (manajemen) yang sangat sibuk: 3 slide ringkasan (beberapa detik per slide), lalu slide temuan & tindak lanjut per bisnis untuk SEMUA bisnis yang bermasalah.',
     'Yang mereka perlu tahu cepat: apakah pelanggan makin aktif memakai produk (adopsi), pelanggan mana yang berisiko berhenti/churn atau perlu perpanjangan, nilai yang dikelola pelanggan lewat platform, dan tindakan apa yang harus dilakukan tim pekan ini.',
     '',
     'ATURAN:',
@@ -108,7 +108,7 @@ function wkBuildPacket(an) {
     '1. id "ringkasan": kartu KPI utama (pekan ini vs pekan lalu + tren mini 8 pekan). Judul = kesimpulan terpenting pekan ini.',
     '2. id "tren": grafik kecil 8 pekan (kebun aktif, akun aktif, TBS tercatat, kebun berisiko). Judul = arah tren yang paling penting.',
     '3. id "tindak": tabel kebun yang perlu tindak lanjut (status, perubahan, temuan, tindakan + PIC). Judul = jumlah/prioritas tindak lanjut.',
-    '4+. id "temuan_..." (lihat bagian SLIDE TEMUAN & TINDAK LANJUT di data): tabel semua temuan dan tindak lanjut per kelompok tema. Judul = jumlah kebun + inti masalah kelompok itu; insight = pola temuan + kebun yang harus ditangani pekan ini; speaker_notes = bahas SETIAP kebun di slide itu (temuan, tindakan, PIC, target), juga kebun tambahan yang tertulis di kelompok itu tetapi tidak muat di tabel.',
+    '4+. id "temuan_..." (lihat bagian SLIDE TEMUAN & TINDAK LANJUT PER BISNIS di data): tabel per bisnis berisi semua temuan dan tindak lanjutnya. Judul = jumlah bisnis + inti masalah di halaman itu; insight = pola temuan + bisnis yang harus ditangani pekan ini; speaker_notes = bahas SETIAP bisnis di halaman itu (temuan, tindakan, PIC, target), juga bisnis tambahan yang tertulis di halaman itu tetapi tidak muat di tabel.',
     '',
     'ISI TIAP SLIDE:',
     `- title: jawaban, bukan nama topik, maks ${WK_AI_LIMITS.TITLE} karakter termasuk spasi, satu angka kunci, tanpa titik di akhir.`,
@@ -229,22 +229,19 @@ function wkMovers(an) {
 }
 
 /* ------------------------------------------------------------------------- */
-/* Slide temuan & tindak lanjut (semua kebun, dikelompokkan per tema)        */
+/* Slide temuan & tindak lanjut (semua bisnis, satu baris per bisnis)        */
 /* ------------------------------------------------------------------------- */
 
-// Kelompok temuan = siapa yang bergerak: keaktifan/churn (CS, Sales), pencatatan (CS, Agronomi), produksi.
+// Slide temuan disusun PER BISNIS: satu baris = satu bisnis (kebun pelanggan) dengan semua temuan & tindak lanjutnya.
+// (Struktur kelompok dipertahankan agar mudah dipecah lagi bila suatu saat perlu; saat ini satu kelompok berisi semua temuan.)
 const WK_FINDING_GROUPS = [
-  { id: 'aktif', name: 'Keaktifan & risiko churn', codes: ['tanpa_input', 'input_jarang', 'akun_pasif', 'langganan'],
-    title: (n, r) => `${n} kebun: keaktifan & churn${r ? `, ${r} berisiko` : ''}` },
-  { id: 'data', name: 'Kualitas pencatatan data', codes: ['tanpa_berat', 'kebocoran', 'bjr', 'blok_luas'],
-    title: n => `${n} kebun perlu perbaikan pencatatan` },
-  { id: 'produksi', name: 'Produksi TBS', codes: ['tbs_turun'],
-    title: n => `${n} kebun TBS turun >${WK_CONFIG.THRESHOLDS.TBS_TURUN_PCT}% dari pekan lalu` }
+  { id: 'bisnis', name: 'Temuan & tindak lanjut per bisnis', codes: null,   // null = semua jenis temuan
+    title: (n, r) => `${n} bisnis perlu tindak lanjut${r ? `, ${r} berisiko` : ''}` }
 ];
 // Tabel slide temuan: kolom & lebar relatif (dipakai juga untuk memperkirakan tinggi baris saat membagi halaman)
-const WK_FINDING_COLS = { head: ['Kebun', 'Status', 'Semua temuan pekan ini', 'Tindak lanjut · PIC', 'Target'], widths: [1.7, 1.1, 3.7, 3.5, 1.0] };
+const WK_FINDING_COLS = { head: ['Bisnis', 'Status', 'Semua temuan pekan ini', 'Tindak lanjut · PIC', 'Target'], widths: [1.7, 1.1, 3.7, 3.5, 1.0] };
 
-/** Baris tabel temuan satu kebun dalam satu kelompok: semua temuan + semua tindakan (unik) + target. */
+/** Baris tabel temuan satu bisnis: semua temuan + semua tindakan (unik) + target. */
 function wkFindingRow(k, findings) {
   const seen = {};
   const actions = findings.map(f => WK_TINDAK[f.code]).filter(t => !seen[t.aksi] && (seen[t.aksi] = true))
@@ -264,7 +261,7 @@ function wkFindingRowHeight(cells) {
 
 /**
  * Halaman slide temuan: [{id, group, page, pages, rows, overflow, total, risiko}].
- * Kebun dibagi per kelompok, baris diisi sampai tinggi tabel penuh; total halaman dibatasi MAX_FINDING_SLIDES
+ * Satu baris per bisnis, baris diisi sampai tinggi tabel penuh; total halaman dibatasi MAX_FINDING_SLIDES
  * (kebun yang tidak muat ditulis sebagai "+N kebun lain" dan dirinci di speaker notes).
  */
 function wkFindingPages(an) {
@@ -272,7 +269,7 @@ function wkFindingPages(an) {
   const avail = L.BOTTOM - L.FINDING_TABLE_TOP - 28 - 16;   // header tabel + baris keterangan "+N kebun lain"
   const tl = wkFollowupList(an);
   const groups = WK_FINDING_GROUPS.map(g => {
-    const rows = tl.map(k => ({ k, f: k.findings.filter(x => g.codes.indexOf(x.code) >= 0) })).filter(x => x.f.length)
+    const rows = tl.map(k => ({ k, f: k.findings.filter(x => !g.codes || g.codes.indexOf(x.code) >= 0) })).filter(x => x.f.length)
       .map(x => wkFindingRow(x.k, x.f));
     const chunks = [];
     let cur = [], h = 0;
