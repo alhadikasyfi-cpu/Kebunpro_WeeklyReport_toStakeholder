@@ -10,7 +10,7 @@
 
 // Sel jawaban Claude di sheet tabel weekly (WK_CONFIG.SHEET_NAME). Harus di LUAR tabel data (kolom A–AE).
 const WK_AI_CELL = 'AF2';
-const WK_AI_LIMITS = { TITLE: 47, INSIGHT_SIDE: 420, INSIGHT_STRIP: 230, NOTES: 1400 };
+const WK_AI_LIMITS = { TITLE: 47, INSIGHT_SIDE: 560, INSIGHT_STRIP: 230, NOTES: 1400 };
 const WK_SLIDE_IDS = ['pemakaian', 'pelanggan'];
 
 /* ------------------------------------------------------------------------- */
@@ -64,7 +64,11 @@ function wkPacketData(an) {
   L.push(row('Akun menginput ÷ akun terdaftar (%)', 'penetrasi', v => wkFmt(v, 0)));
   L.push(row('Akun aktif', 'userAktif', v => wkFmt(v)));
   L.push(row('Hari input rata-rata per kebun', 'rataHari', v => wkFmt(v, 1)));
-  L.push(row('Catatan diinput', 'catatan', v => wkFmt(v)));
+  L.push(row('Catatan diinput (total)', 'catatan', v => wkFmt(v)));
+  L.push(row('Input panen', 'catPanen', v => wkFmt(v)));
+  L.push(row('Input muat', 'catMuat', v => wkFmt(v)));
+  L.push(row('Input jual', 'catJual', v => wkFmt(v)));
+  L.push(row('Input rawat', 'catRawat', v => wkFmt(v)));
   L.push(row('TBS tercatat terjual (ton)', 'ton', v => wkFmtAuto(v)));
   L.push(row('Luas dipanen (ha)', 'luasPanen', v => wkFmtAuto(v)));
   L.push(row('Nilai penjualan TBS', 'pendapatan', v => wkFmtRp(v)));
@@ -107,12 +111,12 @@ function wkBuildPacket(an) {
     '- Kalimat pertama langsung temuan + angka. Jangan membuka dengan "Slide ini" / "Berdasarkan data".',
     '',
     'SLIDE:',
-    '1. id "pemakaian": pemakaian produk. 3 grafik kecil WAU 8 pekan (KebunPRO App, TimPRO Mandor, KebunPRO Web Admin) + total WAU, kebun aktif input, akun menginput (persen akun terdaftar yang menginput data). Judul = kesimpulan pemakaian terpenting; insight = aplikasi mana yang naik/turun dan artinya (owner terlibat? data lapangan masuk?).',
+    '1. id "pemakaian": pemakaian produk. 3 grafik kecil WAU 8 pekan (KebunPRO App, TimPRO Mandor, KebunPRO Web Admin) + total WAU, kebun aktif input, akun menginput (persen akun terdaftar yang menginput data). Judul = kesimpulan pemakaian terpenting; insight = kalimat pertama kesimpulan utama, lalu kalimat terpisah untuk: aplikasi mana yang naik/turun dan artinya (owner terlibat? data lapangan masuk?), jumlah input panen, muat, jual, dan rawat pekan ini masing-masing dengan % vs pekan lalu (tidak ada grafiknya, jadi angkanya wajib di sini), dan rata-rata hari input per kebun.',
     '2. id "pelanggan": kesehatan pelanggan. Kebun berisiko, TBS tercatat, nilai penjualan; tren 8 pekan tonase TBS dan luas dipanen; status pelanggan; kebun baru mulai & tanpa aktivitas; rencana tindak lanjut bisnis prioritas. Judul = jumlah/prioritas tindak lanjut; speaker_notes = ringkasan status pelanggan dan keputusan yang diminta (rincian per bisnis ditambahkan otomatis di bawahnya, jangan diulang satu per satu).',
     '',
     'ISI TIAP SLIDE:',
     `- title: jawaban, bukan nama topik, maks ${WK_AI_LIMITS.TITLE} karakter termasuk spasi, satu angka kunci, tanpa titik di akhir.`,
-    `- insight: tampil di slide. Slide 1: 2–3 kalimat (maks ${WK_AI_LIMITS.INSIGHT_SIDE} karakter); slide 2: 1–2 kalimat pendek (maks ${WK_AI_LIMITS.INSIGHT_STRIP} karakter, tampil sebagai satu pita). Tebalkan 1–2 angka kunci dengan **...**. Kalimat terakhir = artinya bagi bisnis / apa yang harus dilakukan.`,
+    `- insight: tampil di slide. Slide 1: 3–5 kalimat pendek (maks ${WK_AI_LIMITS.INSIGHT_SIDE} karakter; kalimat pertama tampil sebagai sorotan, berikutnya sebagai butir); slide 2: 1–2 kalimat pendek (maks ${WK_AI_LIMITS.INSIGHT_STRIP} karakter, tampil sebagai satu pita). Tebalkan 1–2 angka kunci dengan **...**. Kalimat terakhir = artinya bagi bisnis / apa yang harus dilakukan.`,
     '- speaker_notes: 100–170 kata untuk presenter: apa yang terlihat (angka + % vs pekan lalu + tren), mengapa, dampaknya bagi bisnis SaaS (adopsi, churn, perpanjangan), dan keputusan/tindakan yang diminta dari stakeholder. Teks polos tanpa **.',
     '',
     'FORMAT JAWABAN (WAJIB): satu blok kode berisi SATU objek JSON dalam SATU BARIS (tanpa baris baru), tanpa tanda kutip ganda di dalam teks (pakai kutip tunggal):',

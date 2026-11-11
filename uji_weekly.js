@@ -173,6 +173,11 @@ function checkSlides(an, aiAns, label) {
       const w = ep.size.width.magnitude, h = ep.size.height.magnitude;
       assert.ok(x >= 18 && x + w <= 709 && y >= 46 && y + h <= 372, `[${sp.id}] bentuk keluar area: x=${x.toFixed(1)} y=${y.toFixed(1)} w=${w.toFixed(1)} h=${h.toFixed(1)}`);
     });
+    // SEMUA titik data berlabel: setiap grafik punya label angka sebanyak jumlah pekan
+    const nWeeks = run('AN.weeks.length'), nCharts = sp.id === 'pemakaian' ? run('wkUsageCharts(AN)').length : 2;
+    const valueLabels = b.req.filter(r => r.updateParagraphStyle && r.updateParagraphStyle.style.alignment === 'CENTER' && r.updateParagraphStyle.style.lineSpacing === 100)
+      .map(r => r.updateParagraphStyle.objectId);
+    assert.ok(valueLabels.length >= nCharts * nWeeks, `[${sp.id}] label angka ${valueLabels.length} < ${nCharts * nWeeks}`);
     // periode tampil di kotak kanan atas
     assert.ok(b.req.some(r => r.insertText && /PEKAN INI/.test(r.insertText.text)), `[${sp.id}] periode tidak tampil`);
     // judul grafik kecil muat satu baris (lebar grafik ±126 pt)

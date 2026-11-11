@@ -323,6 +323,17 @@ function wkAllBusinessNotes(an) {
   }).join('\n');
 }
 
+/** "Input pekan ini: panen 120 (▲ 8%), muat 80 (▼ 3%), jual 40 (= 0%), rawat 25 (▲ baru); rata-rata 3,4 hari input per kebun (▼ 6%)." */
+function wkInputSentence(an) {
+  const K = key => an.kpis.find(k => k.key === key);
+  const parts = [['catPanen', 'panen'], ['catMuat', 'muat'], ['catJual', 'jual'], ['catRawat', 'rawat']]
+    .map(([key, nm]) => { const k = K(key); return k ? `${nm} **${k.value}** (${k.delta.txt})` : null; }).filter(Boolean);
+  const hari = K('rataHari');
+  if (!parts.length && !hari) return '';
+  return (parts.length ? `Input pekan ini: ${parts.join(', ')}` : '') +
+    (hari ? `${parts.length ? '; rata-rata' : 'Rata-rata'} ${hari.value} hari input per kebun (${hari.delta.txt})` : '') + '.';
+}
+
 /* ------------------------------------------------------------------------- */
 /* Teks otomatis (dipakai bila jawaban Claude belum ada)                     */
 /* ------------------------------------------------------------------------- */
@@ -347,11 +358,13 @@ function wkAutoTexts(an) {
     charts.map(k => `${k.name} ${kv(k, true)}`).join(', ') + '.',
     aktif && charts.indexOf(aktif) < 0 ? `Kebun aktif ${aktif.value} dari ${an.cur.kebun} (${aktif.delta.txt})${pen ? `, akun menginput ${kv(pen)} dari akun terdaftar` : ''}.`
       : (pen ? `Akun menginput ${kv(pen)} dari akun terdaftar.` : ''),
+    wkInputSentence(an),
     worst && worst.delta.dir < 0 ? `${worst.name} turun paling dalam; perlu dicek penyebabnya pekan ini.`
       : (charts.some(k => /^wau/.test(k.key)) ? 'Tidak ada aplikasi yang turun pekan ini.' : '')
   ].filter(Boolean).join(' ');
   const pemakaianNotes = `Pekan laporan ${an.labelLaporan}, dibanding ${an.labelPembanding}.${partial} ` +
-    charts.concat([total, aktif, pen].filter(Boolean)).map(k => trendTxt(k) + '.').join(' ');
+    charts.concat([total, aktif, pen].filter(Boolean)).map(k => trendTxt(k) + '.').join(' ') + ' ' +
+    ['catPanen', 'catMuat', 'catJual', 'catRawat', 'rataHari'].map(K).filter(Boolean).map(k => trendTxt(k) + '.').join(' ');
 
   // 2. Pelanggan
   const pelangganTitle = fit(an.risiko ? `${an.risiko} kebun berisiko, ${an.diam.length} tanpa aktivitas pekan ini`

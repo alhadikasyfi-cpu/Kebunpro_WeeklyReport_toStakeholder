@@ -296,6 +296,8 @@ function wkAnalyze(rows, today, anchor, wau) {
       userAktif: sumKey('user_aktif'), userTerdaftar: sumKey('user_terdaftar'),
       rataHari: hariKnown && ex.length ? wkSum(ex.map(k => (k.evals[i].curRec && k.evals[i].curRec.hari_aktif_input) || 0)) / ex.length : null,
       catatan: has && wkAnyNum(ms.map(m => m.catatan)) ? wkSum(ms.map(m => m.catatan)) : null,
+      // jumlah input per jenis kegiatan (catatan_* di tabel), untuk observasi pemakaian
+      catPanen: sumKey('catatan_panen'), catMuat: sumKey('catatan_muat'), catJual: sumKey('catatan_jual'), catRawat: sumKey('catatan_rawat'),
       ton: sumKey('ton_terjual'), pendapatan: sumKey('pendapatan_rp'), jjgPanen: sumKey('jjg_dipanen'),
       noweightPct: soldAll ? (sumKey('jjg_terjual_tanpa_berat') || 0) / soldAll * 100 : null,
       risiko: ex.length ? ex.filter(k => k.evals[i].status === WK_STATUS.RISIKO).length : null,
@@ -352,6 +354,10 @@ const WK_KPI_DEFS = [
   { key: 'pendapatan', name: 'Nilai penjualan TBS', unit: () => '', fmt: v => wkFmtRp(v), prorate: true, why: 'nilai transaksi pelanggan yang tercatat' },
   { key: 'rataHari', name: 'Hari input / kebun', unit: () => 'hari', fmt: v => wkFmt(v, 1), prorate: true, why: 'kedalaman pemakaian harian' },
   { key: 'catatan', short: 'Catatan', name: 'Catatan diinput', unit: () => 'catatan', fmt: v => wkFmt(v), prorate: true, why: 'volume transaksi di aplikasi' },
+  { key: 'catPanen', short: 'Panen', name: 'Input panen', unit: () => 'catatan', fmt: v => wkFmt(v), prorate: true, why: 'catatan panen yang diinput' },
+  { key: 'catMuat', short: 'Muat', name: 'Input muat', unit: () => 'catatan', fmt: v => wkFmt(v), prorate: true, why: 'catatan muat yang diinput' },
+  { key: 'catJual', short: 'Jual', name: 'Input jual', unit: () => 'catatan', fmt: v => wkFmt(v), prorate: true, why: 'catatan penjualan yang diinput' },
+  { key: 'catRawat', short: 'Rawat', name: 'Input rawat', unit: () => 'catatan', fmt: v => wkFmt(v), prorate: true, why: 'catatan perawatan yang diinput' },
   { key: 'noweightPct', name: 'Janjang tanpa berat', unit: () => '%', fmt: v => wkFmt(v, 1), isPct: true, goodDown: true, why: 'kualitas data pelanggan' }
 ];
 

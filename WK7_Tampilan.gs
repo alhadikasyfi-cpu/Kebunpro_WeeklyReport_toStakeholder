@@ -151,26 +151,30 @@ function wkUiSeriesChart(b, k, labels, color, l, t, w, h) {
     { text: String(k.value), size: 15, weight: W.HEAVY, color: C.TEXT },
     { text: k.unit === '%' ? '%' : (k.unit ? ' ' + k.unit : ''), size: 7.6, weight: W.STRONG, color: C.MUTED },
     { text: '  ' + k.delta.txt, size: 7.6, weight: W.HEAVY, color: wkUiDeltaColor(k) }] });
-  const top = t + 44, bottomPad = 13, ch = h - 44 - bottomPad, yb = top + ch;
+  // SEMUA titik data diberi label: angka di atas setiap batang, tanggal di bawah setiap batang
+  const labelH = 9, bottomPad = 17, top = t + 44 + labelH, ch = h - 44 - labelH - bottomPad, yb = top + ch;
   const vals = k.spark.map(v => (v === null || v === undefined || !isFinite(v) ? null : v));
   const max = Math.max.apply(null, vals.filter(v => v !== null).concat([0])) || 1;
   const step = w / vals.length, bw = step * 0.62;
-  b.rect(l + step * (vals.length - 1), top - 12, step, ch + 12, { fill: C.WEEK });   // sorot pekan laporan
+  // ukuran huruf angka mengikuti lebar kolom agar angka tidak saling menimpa
+  const longest = vals.reduce((a, v) => Math.max(a, v === null ? 1 : String(k.fmt(v)).length), 1);
+  const vSize = Math.max(4.8, Math.min(6.6, (step + 2) / (longest * WK_CONFIG.CHAR_W.HEAVY)));
+  b.rect(l + step * (vals.length - 1), top - labelH - 3, step, ch + labelH + 3, { fill: C.WEEK });   // sorot pekan laporan
   b.line(l, yb, l + w, yb, C.GRID, 0.75);
+  let prevMon = null;
   vals.forEach((v, i) => {
     const last = i === vals.length - 1, x = l + step * i;
-    if (v !== null && v > 0) {
-      const bh = Math.max(ch * v / max, 0.8);
-      b.rect(x + (step - bw) / 2, yb - bh, bw, bh, { fill: last ? color.dark : color.light });
-    }
-    if ((last || i === 0) && v !== null) {
-      const y = yb - (v > 0 ? ch * v / max : 0) - 11;
-      b.text(k.fmt(v), last ? x + step - 40 : x, y, 40, 10, { size: 6.8, weight: last ? W.HEAVY : W.STRONG,
-        color: last ? color.dark : C.MUTED, align: last ? 'END' : 'START' });
-    }
+    const bh = v !== null && v > 0 ? Math.max(ch * v / max, 0.8) : 0;
+    if (bh) b.rect(x + (step - bw) / 2, yb - bh, bw, bh, { fill: last ? color.dark : color.light });
+    b.text(v === null ? '–' : k.fmt(v), x - 3, yb - bh - labelH, step + 6, labelH - 1, { size: vSize, align: 'CENTER', valign: 'BOTTOM',
+      weight: last ? W.HEAVY : W.STRONG, color: v === null ? C.MUTED : (last ? color.dark : C.TEXT) });
+    // tanggal: hari di setiap batang, nama bulan hanya di batang pertama & saat bulan berganti
+    const parts = String(labels[i] || '').split(' '), mon = (parts[1] || '').replace('*', '');
+    const day = parts[0] + (String(labels[i]).indexOf('*') >= 0 ? '*' : '');
+    b.text(mon && mon !== prevMon ? `${day}\n${mon}` : day, x - 3, yb + 1.5, step + 6, 15, { size: 5.8, align: 'CENTER', lineSpacing: 95,
+      weight: last ? W.HEAVY : W.BODY, color: last ? C.TEXT : C.MUTED });
+    prevMon = mon;
   });
-  b.text(labels[0], l, yb + 2, w / 2, 10, { size: 6.8, color: C.MUTED });
-  b.text(labels[labels.length - 1], l + w / 2, yb + 2, w / 2, 10, { size: 6.8, weight: W.HEAVY, color: C.TEXT, align: 'END' });
 }
 
 /* ------------------------------------------------------------------------- */
