@@ -24,10 +24,15 @@ const WK_UI = {
   },
   // Warna seri: aksen kartu KPI dan grafik per aplikasi (tua = pekan laporan, muda = pekan sebelumnya)
   SERIES: [
-    { dark: '#2563eb', light: '#a9c2f7' },   // biru   – App estate / indikator 1
+    { dark: '#2563eb', light: '#a9c2f7' },   // biru   – KebunPRO App / indikator 1
     { dark: '#c2410c', light: '#f2b394' },   // oranye – TimPRO Mandor / indikator 2
     { dark: '#374151', light: '#b8bec8' },   // gelap  – Web Admin / indikator 3
     { dark: '#d69e00', light: '#f1d98a' }    // kuning – indikator 4
+  ],
+  // Warna grafik produksi: tonase TBS (hijau) dan luas dipanen (kuning tua)
+  PROD: [
+    { dark: '#15803d', light: '#a7d7b5' },
+    { dark: '#b7791f', light: '#ecd39c' }
   ]
 };
 
@@ -144,6 +149,7 @@ function wkUiSeriesChart(b, k, labels, color, l, t, w, h) {
   b.text(k.short || k.name, l + 11, t, w - 11, 12, { size: 8, weight: W.HEAVY, color: C.TEXT, valign: 'MIDDLE' });
   b.text('', l, t + 13, w, 18, { valign: 'BOTTOM', segs: [
     { text: String(k.value), size: 15, weight: W.HEAVY, color: C.TEXT },
+    { text: k.unit === '%' ? '%' : (k.unit ? ' ' + k.unit : ''), size: 7.6, weight: W.STRONG, color: C.MUTED },
     { text: '  ' + k.delta.txt, size: 7.6, weight: W.HEAVY, color: wkUiDeltaColor(k) }] });
   const top = t + 44, bottomPad = 13, ch = h - 44 - bottomPad, yb = top + ch;
   const vals = k.spark.map(v => (v === null || v === undefined || !isFinite(v) ? null : v));
@@ -263,5 +269,52 @@ function wkUiStatusBars(b, an, A) {
     b.text('', A.left + labelW + barW + 8, y, valW, bh + 8, { valign: 'MIDDLE', segs: [
       { text: `${r.v} kebun`, size: 8.4, weight: W.HEAVY, color: C.TEXT },
       { text: `\n${d.txt}`, size: 6.8, weight: W.HEAVY, color: wkUiDeltaColor({ delta: d, goodDown: r.goodDown }) }] });
+  });
+}
+
+/** Status pelanggan ringkas: 3 baris (titik warna, nama, jumlah kebun, perubahan vs pekan lalu). */
+function wkUiStatusCompact(b, an, A) {
+  const C = WK_UI.COLOR, W = WK_CONFIG.WEIGHT;
+  const sehat = an.total - an.risiko - an.perhatian;
+  const prevSehat = an.prev.kebun !== null && an.prev.kebun !== undefined ? an.prev.kebun - an.prevRisiko - an.prevPerhatian : null;
+  const rows = [
+    { name: 'Berisiko', v: an.risiko, p: an.prevRisiko, color: C.BAD, goodDown: true },
+    { name: 'Perlu perhatian', v: an.perhatian, p: an.prevPerhatian, color: C.WARN, goodDown: true },
+    { name: 'Sehat', v: sehat, p: prevSehat, color: C.GOOD, goodDown: false }
+  ];
+  const rh = A.height / rows.length;
+  rows.forEach((r, i) => {
+    const y = A.top + i * rh, d = wkDelta(r.v, r.p);
+    b.rect(A.left, y + rh / 2 - 3, 6, 6, { round: true, fill: r.color });
+    b.text(r.name, A.left + 11, y, A.width * 0.5, rh, { size: 7.8, weight: W.STRONG, color: C.TEXT, valign: 'MIDDLE' });
+    b.text('', A.left + A.width * 0.45, y, A.width * 0.55, rh, { align: 'END', valign: 'MIDDLE', segs: [
+      { text: `${r.v} kebun`, size: 8.4, weight: W.HEAVY, color: r.color },
+      { text: `  ${d.txt}`, size: 6.8, weight: W.HEAVY, color: wkUiDeltaColor({ delta: d, goodDown: r.goodDown }) }] });
+    if (i < rows.length - 1) b.line(A.left, y + rh, A.left + A.width, y + rh, C.GRID, 0.5);
+  });
+}
+
+/** Perubahan pelanggan: kebun baru mulai pekan ini (hijau) dan kebun tanpa aktivitas (merah, dengan input terakhir). */
+function wkUiChangeList(b, an, A) {
+  const C = WK_UI.COLOR, W = WK_CONFIG.WEIGHT;
+  const groups = [
+    { name: 'Mulai pekan ini', color: C.GOOD, items: an.baru.map(k => wkShortName(k.name)) },
+    { name: 'Tanpa aktivitas', color: C.BAD, items: an.diam.map(k => wkShortName(k.name) + (k.lastInput ? ` (${wkTglPendek(k.lastInput)})` : '')) }
+  ];
+  const gh = A.height / 2;
+  groups.forEach((g, i) => {
+    const y = A.top + i * gh;
+    b.text('', A.left, y, A.width, 10, { valign: 'MIDDLE', segs: [
+      { text: g.name, size: 7.4, weight: W.HEAVY, color: C.TEXT }, { text: `  ${g.items.length} kebun`, size: 7.4, weight: W.HEAVY, color: g.color }] });
+    // nama sebanyak muat (maks. baris tersedia); sisanya "+N lainnya" (rincian di speaker notes)
+    const maxLines = Math.max(1, Math.floor((gh - 12) / (7 * 1.25)));
+    let shown = g.items.slice(), txt;
+    for (;;) {
+      const rest = g.items.length - shown.length;
+      txt = g.items.length ? shown.join(', ') + (rest ? `${shown.length ? ', ' : ''}+${rest} lainnya` : '') : 'Tidak ada';
+      if (!shown.length || wkEstLines(txt, 7, A.width) <= maxLines) break;
+      shown.pop();
+    }
+    b.text(txt, A.left, y + 11, A.width, gh - 12, { size: 7, color: g.items.length ? C.TEXT : C.MUTED, lineSpacing: 115 });
   });
 }

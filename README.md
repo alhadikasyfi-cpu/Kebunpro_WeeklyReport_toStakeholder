@@ -12,12 +12,12 @@ Template slide-nya sama dengan Monthly Report. Deck weekly adalah **satu file te
 - Kartu KPI diberi aksen warna di sebelah kiri.
 - Perubahan vs pekan lalu: **hijau = membaik, merah = memburuk** (untuk "kebun berisiko", turun = membaik).
 - Judul panel diberi aksen kuning; panel observasi dan rencana tindak lanjut memakai kepala hijau tua.
-- Setiap aplikasi punya warna sendiri: biru = App estate, oranye = TimPRO Mandor, abu gelap = Web Admin. Pekan laporan diberi warna tua di atas kolom yang disorot.
+- Setiap aplikasi punya warna sendiri: biru = KebunPRO App, oranye = TimPRO Mandor, abu gelap = Web Admin. Pekan laporan diberi warna tua di atas kolom yang disorot.
 
 | Slide | Isi |
 |---|---|
-| 1. Pemakaian produk | Judul dan periode (*PEKAN INI … vs …*). Kiri: kartu **Total WAU (unik)**, **kebun aktif input**, **penetrasi akun**, lalu panel **Tren WAU per aplikasi · 8 pekan** (App estate, TimPRO Mandor, Web Admin; skala masing-masing; angka pekan ini dan % vs pekan lalu). Kanan: **Observasi utama** berisi kalimat sorotan dan butir-butir. |
-| 2. Kesehatan pelanggan & tindakan | Kiri: kartu **kebun berisiko**, **TBS tercatat**, **nilai penjualan TBS**; panel **Status pelanggan** (batang berisiko / perlu perhatian / sehat dengan perubahan vs pekan lalu); daftar **Kebun baru mulai** dan **Tanpa aktivitas** (dengan tanggal input terakhir). Kanan: **Observasi utama** dan **Rencana tindak lanjut / PIC** (bisnis prioritas bernomor, chip PIC, dan target). **Speaker notes memuat rincian semua bisnis.** |
+| 1. Pemakaian produk | Judul dan periode (*PEKAN INI … vs …*). Kiri: kartu **Total WAU (unik)**, **kebun aktif input**, **akun menginput** (akun yang menginput data ÷ akun login terdaftar, contoh "Akun menginput (22/136)" = 16%), lalu panel **Tren WAU per aplikasi · 8 pekan** (KebunPRO App, TimPRO Mandor, KebunPRO Web Admin; skala masing-masing; angka pekan ini dan % vs pekan lalu). Kanan: **Observasi utama** berisi kalimat sorotan dan butir-butir. |
+| 2. Kesehatan pelanggan & tindakan | Kiri: kartu **kebun berisiko**, **TBS tercatat**, **nilai penjualan TBS**; panel **Tren produksi · 8 pekan** (tonase TBS dan luas dipanen pekan per pekan); **Status pelanggan** (berisiko / perlu perhatian / sehat dengan perubahan vs pekan lalu) dan **Perubahan pelanggan** (kebun mulai pekan ini dan kebun tanpa aktivitas, dengan tanggal input terakhir). Kanan: **Observasi utama** dan **Rencana tindak lanjut / PIC** (bisnis prioritas bernomor, chip PIC, dan target). **Speaker notes memuat rincian semua bisnis.** |
 
 ## Tabel WAU
 

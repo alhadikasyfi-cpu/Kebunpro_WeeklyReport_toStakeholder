@@ -262,7 +262,7 @@ function wkPlanSlides(an, ai) {
     wkUiObservations(b, text('pemakaian', 'insight'), rightL, F.top, rightW, F.bottom - F.top, tag);
   } });
 
-  // 2. Kesehatan pelanggan & tindakan: KPI, status pelanggan, kebun baru/diam (kiri), observasi + rencana (kanan)
+  // 2. Kesehatan pelanggan & tindakan: KPI, tren TBS & luas dipanen, status + perubahan pelanggan (kiri), observasi + rencana (kanan)
   const tl = wkFollowupList(an);
   const cards2 = ['risiko', 'ton', 'pendapatan'].map(K).filter(Boolean);
   const notes2 = text('pelanggan', 'notes') + '\n\nRINCIAN TEMUAN & TINDAK LANJUT PER BISNIS:\n' + wkAllBusinessNotes(an);
@@ -274,14 +274,15 @@ function wkPlanSlides(an, ai) {
   specs.push({ id: 'pelanggan', title: text('pelanggan', 'title'), notes: notes2, draw: b => {
     wkUiHeader(b, text('pelanggan', 'title'), an);
     wkUiKpiRow(b, cards2.map((k, i) => Object.assign({}, k, { colorIdx: [1, 0, 3][i] })), { left: F.left, top: F.top, width: leftW, height: kpiH });
-    const statusH = 112;
-    const S = wkUiPanel(b, F.left, bodyTop, leftW, statusH, 'STATUS PELANGGAN', `${an.total} kebun · vs pekan lalu`);
-    wkUiStatusBars(b, an, S);
-    const listTop = bodyTop + statusH + G, listH = F.bottom - listTop - (an.reportDays < 7 ? 10 : 0), half = (leftW - G) / 2;
-    const L1 = wkUiPanel(b, F.left, listTop, half, listH, 'KEBUN BARU MULAI', `${an.baru.length} kebun`);
-    wkUiNameList(b, an.baru.map(k => wkShortName(k.name)), L1, WK_UI.COLOR.GOOD);
-    const L2 = wkUiPanel(b, F.left + half + G, listTop, half, listH, 'TANPA AKTIVITAS', `${an.diam.length} kebun`);
-    wkUiNameList(b, an.diam.map(k => wkShortName(k.name) + (k.lastInput ? ` · terakhir ${wkTglPendek(k.lastInput)}` : '')), L2, WK_UI.COLOR.BAD);
+    // Tren produksi 8 pekan: tonase TBS dan luas dipanen (skala masing-masing)
+    const prodH = 140;
+    const P = wkUiPanel(b, F.left, bodyTop, leftW, prodH, `TREN PRODUKSI · ${an.weeks.length} PEKAN`, 'kolom hijau = pekan laporan');
+    const prod = ['ton', 'luasPanen'].map(K).filter(Boolean), pw = (P.width - 14) / 2;
+    prod.forEach((k, i) => wkUiSeriesChart(b, k, labels, WK_UI.PROD[i], P.left + i * (pw + 14), P.top, pw, P.height));
+    // Status pelanggan (ringkas) dan perubahan pelanggan (mulai / berhenti)
+    const rowTop = bodyTop + prodH + G, rowH = F.bottom - rowTop - (an.reportDays < 7 ? 10 : 0), half = (leftW - G) / 2;
+    wkUiStatusCompact(b, an, wkUiPanel(b, F.left, rowTop, half, rowH, 'STATUS PELANGGAN', `${an.total} kebun`));
+    wkUiChangeList(b, an, wkUiPanel(b, F.left + half + G, rowTop, half, rowH, 'PERUBAHAN PELANGGAN', 'pekan ini'));
     foot(b, F.bottom - 8);
     // tinggi panel observasi mengikuti panjang insight (pita pendek), sisanya untuk rencana tindak lanjut
     const obsText = wkStripBold(text('pelanggan', 'insight'));
@@ -332,7 +333,7 @@ function wkAutoTexts(an) {
   const names = (list, n) => list.slice(0, n || 3).map(k => k.name).join(', ') + (list.length > (n || 3) ? ` dan ${list.length - (n || 3)} lainnya` : '');
   const fit = (t, alt) => (t.length <= WK_AI_LIMITS.TITLE ? t : alt);
   const total = K('wauTotal'), aktif = K('aktif'), pen = K('penetrasi'), charts = wkUsageCharts(an);
-  const tl = wkFollowupList(an), ton = K('ton'), nilai = K('pendapatan');
+  const tl = wkFollowupList(an), ton = K('ton'), nilai = K('pendapatan'), luas = K('luasPanen');
   const partial = an.reportDays < 7 ? ` Pekan laporan baru ${an.reportDays} dari 7 hari; angka masih bisa bertambah.` : '';
   const withUnit = k => `${k.value}${k.unit === '%' ? '%' : (k.unit ? ' ' + k.unit : '')}`;
   const trendTxt = k => `${k.name} ${withUnit(k)} (${k.delta.txt} vs pekan lalu, tren ${an.weeks.length} pekan ${k.trend})`;
@@ -344,8 +345,8 @@ function wkAutoTexts(an) {
     : fit(`${aktif ? aktif.value : '-'} dari ${an.total} kebun aktif (${aktif ? aktif.delta.txt : '-'})`, 'Pemakaian KebunPRO pekan ini');
   const pemakaianInsight = [
     charts.map(k => `${k.name} ${kv(k, true)}`).join(', ') + '.',
-    aktif && charts.indexOf(aktif) < 0 ? `Kebun aktif ${aktif.value} dari ${an.cur.kebun} (${aktif.delta.txt})${pen ? `, penetrasi akun ${kv(pen)}` : ''}.`
-      : (pen ? `Penetrasi akun ${kv(pen)}.` : ''),
+    aktif && charts.indexOf(aktif) < 0 ? `Kebun aktif ${aktif.value} dari ${an.cur.kebun} (${aktif.delta.txt})${pen ? `, akun menginput ${kv(pen)} dari akun terdaftar` : ''}.`
+      : (pen ? `Akun menginput ${kv(pen)} dari akun terdaftar.` : ''),
     worst && worst.delta.dir < 0 ? `${worst.name} turun paling dalam; perlu dicek penyebabnya pekan ini.`
       : (charts.some(k => /^wau/.test(k.key)) ? 'Tidak ada aplikasi yang turun pekan ini.' : '')
   ].filter(Boolean).join(' ');
@@ -357,12 +358,13 @@ function wkAutoTexts(an) {
     : `${tl.length} bisnis perlu tindak lanjut, tidak ada yang berisiko`, `${tl.length} bisnis perlu tindak lanjut`);
   const pelangganInsight = wkCutSentence([
     `**${an.risiko} kebun berisiko** (pekan lalu ${an.prevRisiko}); ${an.diam.length} tanpa aktivitas, ${an.baru.length} kebun baru mulai.`,
-    ton ? `TBS tercatat ${kv(ton)}${nilai ? `, nilai penjualan ${kv(nilai)}` : ''}.` : ''
+    ton ? `TBS tercatat ${kv(ton)}${luas ? ` dari luas dipanen ${kv(luas)}` : ''}${nilai ? `, nilai penjualan ${kv(nilai)}` : ''}.` : ''
   ].filter(Boolean).join(' '), WK_AI_LIMITS.INSIGHT_STRIP);
   const pelangganNotes = `Status pelanggan: ${an.risiko} berisiko, ${an.perhatian} perlu perhatian, ${an.total - an.risiko - an.perhatian} sehat.` +
     ` Kebun tanpa aktivitas pekan ini: ${an.diam.length ? names(an.diam, 10) : 'tidak ada'}.` +
     ` Kebun baru mulai pekan ini: ${an.baru.length ? names(an.baru, 10) : 'tidak ada'}.` +
-    (ton ? ` ${trendTxt(ton)}.` : '') + (nilai ? ` ${trendTxt(nilai)}.` : '') + partial;
+    (ton ? ` ${trendTxt(ton)}.` : '') + (luas ? ` ${trendTxt(luas)}.` : '') +
+    (ton && luas && luas.raw ? ` TBS per hektar dipanen ${wkFmt(ton.raw / luas.raw, 2)} ton/ha.` : '') + (nilai ? ` ${trendTxt(nilai)}.` : '') + partial;
 
   return {
     pemakaian: { title: pemakaianTitle, insight: pemakaianInsight, notes: pemakaianNotes },

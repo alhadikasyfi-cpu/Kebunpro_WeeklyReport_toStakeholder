@@ -56,16 +56,17 @@ function wkPacketData(an) {
   const P = an.portfolio;
   const row = (label, key, fmt) => `${label}: ` + P.map(p => (p[key] === null || p[key] === undefined ? '-' : fmt(p[key]))).join(' | ');
   L.push('[TREN PEKAN PER PEKAN] urutan pekan: ' + an.weeks.map(wkLabelSumbu).join(' | ') + (an.reportDays < 7 ? ' (pekan terakhir belum penuh)' : ''));
-  L.push(row('WAU KebunPRO App (estate)', 'wauEstate', v => wkFmt(v)));
+  L.push(row('WAU KebunPRO App', 'wauEstate', v => wkFmt(v)));
   L.push(row('WAU TimPRO Mandor', 'wauMandor', v => wkFmt(v)));
   L.push(row('WAU KebunPRO Web Admin', 'wauAdmin', v => wkFmt(v)));
   L.push(row('Total WAU (unik)', 'wauTotal', v => wkFmt(v)));
   L.push(row('Kebun aktif input', 'aktif', v => wkFmt(v)));
-  L.push(row('Penetrasi akun (%)', 'penetrasi', v => wkFmt(v, 0)));
+  L.push(row('Akun menginput ÷ akun terdaftar (%)', 'penetrasi', v => wkFmt(v, 0)));
   L.push(row('Akun aktif', 'userAktif', v => wkFmt(v)));
   L.push(row('Hari input rata-rata per kebun', 'rataHari', v => wkFmt(v, 1)));
   L.push(row('Catatan diinput', 'catatan', v => wkFmt(v)));
   L.push(row('TBS tercatat terjual (ton)', 'ton', v => wkFmtAuto(v)));
+  L.push(row('Luas dipanen (ha)', 'luasPanen', v => wkFmtAuto(v)));
   L.push(row('Nilai penjualan TBS', 'pendapatan', v => wkFmtRp(v)));
   L.push(row('Kebun berisiko', 'risiko', v => wkFmt(v)));
   L.push(row('Kebun perlu perhatian', 'perhatian', v => wkFmt(v)));
@@ -95,7 +96,7 @@ function wkBuildPacket(an) {
   const guide = [
     'Kamu analis bisnis di SawitPRO, perusahaan SaaS penyedia aplikasi KebunPRO untuk manajemen kebun sawit. Pelanggan kami adalah estate owner (pemilik kebun besar).',
     'Tugasmu menulis teks deck WEEKLY REPORT 2 slide untuk STAKEHOLDER INTERNAL SawitPRO (manajemen) yang sangat sibuk: mereka hanya punya beberapa detik per slide.',
-    'KebunPRO punya 3 aplikasi: KebunPRO App (estate, dipakai owner/estate), TimPRO Mandor (dipakai mandor di lapangan), dan KebunPRO Web Admin (back-office). WAU = pengguna aktif mingguan.',
+    'KebunPRO punya 3 aplikasi: KebunPRO App (dipakai owner/estate), TimPRO Mandor (dipakai mandor di lapangan), dan KebunPRO Web Admin (back-office). WAU = pengguna aktif mingguan.',
     'Yang mereka perlu tahu cepat: apakah pelanggan makin aktif memakai produk (adopsi), pelanggan mana yang berisiko berhenti/churn atau perlu perpanjangan, nilai yang dikelola pelanggan lewat platform, dan tindakan apa yang harus dilakukan tim pekan ini.',
     '',
     'ATURAN:',
@@ -106,8 +107,8 @@ function wkBuildPacket(an) {
     '- Kalimat pertama langsung temuan + angka. Jangan membuka dengan "Slide ini" / "Berdasarkan data".',
     '',
     'SLIDE:',
-    '1. id "pemakaian": pemakaian produk. 3 grafik kecil WAU 8 pekan (estate app, TimPRO Mandor, web admin) + total WAU, kebun aktif input, penetrasi akun. Judul = kesimpulan pemakaian terpenting; insight = aplikasi mana yang naik/turun dan artinya (owner terlibat? data lapangan masuk?).',
-    '2. id "pelanggan": kesehatan pelanggan. Kebun berisiko, TBS tercatat, nilai penjualan; daftar kebun baru mulai & kebun tanpa aktivitas pekan ini; tabel bisnis prioritas. Judul = jumlah/prioritas tindak lanjut; speaker_notes = ringkasan status pelanggan dan keputusan yang diminta (rincian per bisnis ditambahkan otomatis di bawahnya, jangan diulang satu per satu).',
+    '1. id "pemakaian": pemakaian produk. 3 grafik kecil WAU 8 pekan (KebunPRO App, TimPRO Mandor, KebunPRO Web Admin) + total WAU, kebun aktif input, akun menginput (persen akun terdaftar yang menginput data). Judul = kesimpulan pemakaian terpenting; insight = aplikasi mana yang naik/turun dan artinya (owner terlibat? data lapangan masuk?).',
+    '2. id "pelanggan": kesehatan pelanggan. Kebun berisiko, TBS tercatat, nilai penjualan; tren 8 pekan tonase TBS dan luas dipanen; status pelanggan; kebun baru mulai & tanpa aktivitas; rencana tindak lanjut bisnis prioritas. Judul = jumlah/prioritas tindak lanjut; speaker_notes = ringkasan status pelanggan dan keputusan yang diminta (rincian per bisnis ditambahkan otomatis di bawahnya, jangan diulang satu per satu).',
     '',
     'ISI TIAP SLIDE:',
     `- title: jawaban, bukan nama topik, maks ${WK_AI_LIMITS.TITLE} karakter termasuk spasi, satu angka kunci, tanpa titik di akhir.`,
