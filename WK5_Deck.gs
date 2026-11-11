@@ -127,6 +127,23 @@ function wkResetDeck() {
 /* Generate                                                                  */
 /* ------------------------------------------------------------------------- */
 
+const WK_PROP_FRAME = 'WK_FRAME_SLIDE_ID';
+
+/**
+ * Slide bingkai di deck weekly: slide yang ID-nya tersimpan, atau slide 1 yang belum berisi laporan (tanpa teks
+ * "PEKAN INI" / "Pekan laporan"). null bila tidak ada (deck baru): slide memakai bingkai sederhana.
+ */
+function wkFindFrame(pres) {
+  const slides = pres.getSlides();
+  const saved = PropertiesService.getDocumentProperties().getProperty(WK_PROP_FRAME);
+  const bySaved = saved && slides.find(s => s.getObjectId() === saved);
+  if (bySaved) return bySaved;
+  const first = slides[0];
+  if (!first) return null;
+  const txt = first.getShapes().map(sh => { try { return sh.getText().asString(); } catch (e) { return ''; } }).join(' ');
+  return /PEKAN INI|Pekan laporan/i.test(txt) || first.getTables().length ? null : first;
+}
+
 function wkFindSlide(pres, text) {
   return pres.getSlides().find(s => s.getShapes().some(sh => {
     try { return sh.getText().asString().indexOf(text) >= 0; } catch (e) { return false; }
@@ -155,52 +172,44 @@ function wkGenerateWeeklyDeck() {
     if (d.error) return wkAlert(d.error);
     const an = d.an, warnings = an.warnings;
 
-    const tpl = SlidesApp.openById(WK_CONFIG.TEMPLATE_ID);
-    const tCover = tpl.getSlides()[0];   // dipakai hanya bila WITH_COVER_CLOSING
-    const tContent = wkFindSlide(tpl, '{{slide_title}}');
-    const tClosing = wkFindSlide(tpl, 'Terima Kasih') || wkFindSlide(tpl, 'Thank You');
-    if (!tContent) return wkAlert('Slide master {{slide_title}} tidak ditemukan di template. Jalankan "Siapkan Template SawitPRO" (menu monthly) terlebih dahulu.');
-
     let file = wkDeckFile();
     const isNew = !file;
     if (isNew) file = wkCreateDeckFile(d.ss, warnings);
     const presId = file.getId();
     const pres = SlidesApp.openById(presId);
-    const old = pres.getSlides();
-
-    // 1. Salin slide template lalu isi judul; kartu INSIGHT template dihapus (digambar ulang sesuai tata letak weekly)
-    const pageIds = [];
-    if (WK_CONFIG.WITH_COVER_CLOSING) {
-      const cover = pres.appendSlide(tCover);
-      cover.replaceAllText('MONTHLY REPORT KEBUNPRO', 'WEEKLY REPORT KEBUNPRO');
-      ['{{TITLE}}', '{{title}}'].forEach(p => cover.replaceAllText(p, 'Aktivitas Pelanggan KebunPRO'));
-      ['{{PERIOD}}', '{{period}}'].forEach(p => cover.replaceAllText(p, an.labelLaporan));
-      cover.replaceAllText('Lokasi:', 'Cakupan:');
-      cover.replaceAllText('{{location}}', `${an.total} kebun pelanggan · internal SawitPRO`);
-      pageIds.push(cover.getObjectId());
-    }
+    // Slide bingkai (slide 1 yang dibuat tim: logo, badge, kotak periode, pita bawah) disalin untuk setiap slide isi,
+    // lalu dipindah ke akhir dan disembunyikan (skip) agar tidak tampil saat presentasi dan tidak terhapus.
+    const frame = wkFindFrame(pres);
+    if (!frame) warnings.push('Slide bingkai tidak ditemukan (slide 1 deck tanpa teks "PEKAN INI"); dipakai bingkai sederhana.');
+    const old = pres.getSlides().filter(s => !frame || s.getObjectId() !== frame.getObjectId());
 
     const ai = wkReadAiAnswer(wkAiSheet(d.sheet).getRange(WK_AI_CELL).getValue(), an, warnings);
     const specs = wkPlanSlides(an, ai);
-    specs.forEach(sp => {
-      const s = pres.appendSlide(tContent);
-      s.replaceAllText('{{slide_title}}', sp.title);
-      wkRemoveInsightCard(s);
+    specs.forEach((sp, i) => {
+      const s = frame ? frame.duplicate() : pres.appendSlide(SlidesApp.PredefinedLayout.BLANK);
+      if (frame) { s.move(i); try { s.setSkipped(false); } catch (e) { /* abaikan */ } }
       try { s.getNotesPage().getSpeakerNotesShape().getText().setText(sp.notes || ' '); } catch (e) { /* abaikan */ }
       sp.pageId = s.getObjectId();
-      pageIds.push(sp.pageId);
     });
-    if (WK_CONFIG.WITH_COVER_CLOSING && tClosing) pageIds.push(pres.appendSlide(tClosing).getObjectId());
     old.forEach(s => s.remove());
+    if (frame) {
+      frame.move(pres.getSlides().length - 1);
+      try { frame.setSkipped(true); } catch (e) { /* abaikan */ }
+      PropertiesService.getDocumentProperties().setProperty(WK_PROP_FRAME, frame.getObjectId());
+    }
     pres.saveAndClose();
 
-    // 2. Gambar KPI, grafik, tabel (Slides API) lalu nomor halaman
-    specs.forEach(sp => { const b = new WkBatch(sp.pageId); sp.draw(b); b.flush(presId); });
-    Slides.Presentations.batchUpdate({ requests: pageIds.map((id, i) => ({ replaceAllText: {
-      containsText: { text: '{{page}}', matchCase: true }, replaceText: String(i + 1), pageObjectIds: [id] } })) }, presId);
+    // 2. Gambar isi slide (Slides API)
+    specs.forEach(sp => {
+      const b = new WkBatch(sp.pageId);
+      if (!frame) wkUiFallbackFrame(b);
+      sp.draw(b);
+      b.flush(presId);
+    });
 
     wkShowLink(file.getUrl(), `Weekly Report · ${an.labelLaporan}${ai ? ' · teks dari Claude' : ' · teks otomatis'}`, warnings,
-      isNew ? 'File deck weekly baru dibuat. Generate berikutnya akan memperbarui file yang sama.' : 'Isi deck weekly diperbarui (link tetap sama).');
+      (isNew ? 'File deck weekly baru dibuat. Generate berikutnya akan memperbarui file yang sama.' : 'Isi deck weekly diperbarui (link tetap sama).') +
+      ' Slide bingkai disimpan di akhir deck dalam keadaan tersembunyi (skip); ubah slide itu untuk mengganti logo/pita.');
   } finally {
     lock.releaseLock();
   }
@@ -226,64 +235,73 @@ function wkShowLink(url, title, warnings, info) {
  * Speaker notes slide 2 selalu diakhiri rincian SEMUA bisnis (temuan + tindak lanjut), agar tidak ada yang terlewat.
  */
 function wkPlanSlides(an, ai) {
-  const L = WK_CONFIG.LAYOUT, T = WK_CONFIG.TYPE, C = WK_CONFIG.COLOR, auto = wkAutoTexts(an);
+  const F = WK_UI.FRAME, G = WK_UI.GAP, auto = wkAutoTexts(an);
   const text = (id, key) => (ai && ai[id] && ai[id][key]) || auto[id][key];
   const K = key => an.kpis.find(k => k.key === key);
-  const period = `Pekan laporan: ${an.labelLaporan}  ·  Pembanding: ${an.labelPembanding}` +
-    (an.reportDays < 7 ? `  ·  *volume pekan lalu disetarakan ${an.reportDays}/7 hari` : '');
   const labels = an.weeks.map((w, i) => wkLabelSumbu(w) + (i === an.weeks.length - 1 && an.reportDays < 7 ? '*' : ''));
+  const tag = ai ? 'Insight AI' : 'Insight otomatis';
+  const leftW = WK_UI.COL_SPLIT - F.left, rightL = WK_UI.COL_SPLIT + G, rightW = F.right - rightL;
+  const kpiH = 46, bodyTop = F.top + kpiH + G;
+  const foot = (b, y) => { if (an.reportDays < 7) b.text(`*Pekan berjalan ${an.reportDays} dari 7 hari; angka volume pekan lalu disetarakan ${an.reportDays}/7.`,
+    F.left, y, leftW, 9, { size: 6.4, color: WK_UI.COLOR.MUTED }); };
   const specs = [];
 
-  // 1. Pemakaian produk: 3 grafik kecil WAU per aplikasi (skala sendiri) + 3 kartu
+  // 1. Pemakaian produk: KPI (kiri atas), tren WAU per aplikasi (kiri), observasi (kanan)
   const charts = wkUsageCharts(an);
-  const cards = ['wauTotal', 'aktif', 'penetrasi', 'userAktif'].map(K).filter(Boolean)
-    .filter(k => charts.indexOf(k) < 0).slice(0, 3);
+  const cards = ['wauTotal', 'aktif', 'penetrasi', 'userAktif'].map(K).filter(Boolean).filter(k => charts.indexOf(k) < 0).slice(0, 3);
   specs.push({ id: 'pemakaian', title: text('pemakaian', 'title'), notes: text('pemakaian', 'notes'), draw: b => {
-    wkDrawPeriod(b, period);
-    const A = L.CONTENT, gap = 8, w = (A.width - gap * 2) / 3, topH = 150;
-    charts.forEach((k, i) => wkDrawMiniChart(b, { title: k.short, delta: k.delta, goodDown: k.goodDown, values: k.spark, fmt: k.fmt },
-      labels, A.left + i * (w + gap), A.top, w, topH));
-    if (cards.length) wkDrawKpiCards(b, cards, { left: A.left, top: A.top + topH + gap, width: A.width, height: A.height - topH - gap }, cards.length);
-    wkDrawInsightCard(b, text('pemakaian', 'insight'), L.INSIGHT.left, L.INSIGHT.top, L.INSIGHT.width, L.INSIGHT.height);
+    wkUiHeader(b, text('pemakaian', 'title'), an);
+    wkUiKpiRow(b, cards.map((k, i) => Object.assign({}, k, { colorIdx: [0, 3, 1][i] })), { left: F.left, top: F.top, width: leftW, height: kpiH });
+    const panelH = F.bottom - bodyTop - (an.reportDays < 7 ? 10 : 0);
+    const A = wkUiPanel(b, F.left, bodyTop, leftW, panelH,
+      charts.some(k => /^wau/.test(k.key)) ? `TREN WAU PER APLIKASI · ${an.weeks.length} PEKAN` : `TREN KEAKTIFAN · ${an.weeks.length} PEKAN`,
+      'kolom hijau = pekan laporan');
+    const cw = (A.width - 2 * 14) / 3;
+    charts.forEach((k, i) => wkUiSeriesChart(b, k, labels, WK_UI.SERIES[i], A.left + i * (cw + 14), A.top, cw, A.height));
+    foot(b, F.bottom - 8);
+    wkUiObservations(b, text('pemakaian', 'insight'), rightL, F.top, rightW, F.bottom - F.top, tag);
   } });
 
-  // 2. Kesehatan pelanggan & tindakan
+  // 2. Kesehatan pelanggan & tindakan: KPI, status pelanggan, kebun baru/diam (kiri), observasi + rencana (kanan)
   const tl = wkFollowupList(an);
   const cards2 = ['risiko', 'ton', 'pendapatan'].map(K).filter(Boolean);
   const notes2 = text('pelanggan', 'notes') + '\n\nRINCIAN TEMUAN & TINDAK LANJUT PER BISNIS:\n' + wkAllBusinessNotes(an);
+  const items = tl.slice(0, WK_CONFIG.ROWS_FOLLOWUP).map(k => {
+    const r = wkFindingRow(k, k.findings), first = WK_TINDAK[k.findings[0].code];
+    return { title: k.name, finding: k.findings[0].text + (k.findings.length > 1 ? ` (+${k.findings.length - 1} temuan)` : ''),
+      action: first.aksi, pic: first.pic, target: r.target, urgent: r.target === WK_CONFIG.FINDING_TARGET.risiko };
+  });
   specs.push({ id: 'pelanggan', title: text('pelanggan', 'title'), notes: notes2, draw: b => {
-    wkDrawPeriod(b, period);
-    const W = L.RIGHT - L.MARGIN, gap = 8;
-    let y = L.BODY_TOP;
-    wkDrawStrip(b, text('pelanggan', 'insight'), y, 34);
-    y += 34 + gap;
-    if (cards2.length) { wkDrawCompactCards(b, cards2, { left: L.MARGIN, top: y, width: W, height: 58 }); y += 58 + gap; }
-    const half = (W - gap) / 2, listH = 46;
-    wkDrawListBox(b, 'Kebun baru mulai pekan ini', an.baru.map(k => k.name), L.MARGIN, y, half, listH, C.GREEN);
-    wkDrawListBox(b, 'Kebun tanpa aktivitas pekan ini', an.diam.map(k => k.name + (k.lastInput ? ` (terakhir ${wkTglPendek(k.lastInput)})` : '')),
-      L.MARGIN + half + gap, y, half, listH, C.DANGER);
-    y += listH + gap;
-    // tabel bisnis prioritas: baris sebanyak muat sampai batas bawah; sisanya "+N bisnis lain" (rincian di speaker notes)
-    const avail = L.BOTTOM - y - 28 - 13;
-    const rows = [];
-    let h = 0;
-    tl.slice(0, WK_CONFIG.ROWS_FOLLOWUP).map(k => wkFindingRow(k, k.findings)).some(r => {
-      const rh = wkFindingRowHeight(r.cells);
-      if (h + rh > avail) return true;
-      rows.push(r); h += rh; return false;
-    });
-    if (rows.length) {
-      b.table(L.MARGIN, y, W, [WK_FINDING_COLS.head].concat(rows.map(r => r.cells)),
-        { colWidths: WK_FINDING_COLS.widths, fontSize: T.TABLE_CELL_MIN, rowHeight: 26,
-          cellColor: (r, c, t) => (c === 1 ? wkStatusColor(t) : (c === 4 && t === WK_CONFIG.FINDING_TARGET.risiko ? C.DANGER : null)) });
-      const more = tl.length - rows.length;
-      if (more > 0) b.text(`+${more} bisnis lain perlu tindak lanjut: rincian semua bisnis di speaker notes`,
-        L.MARGIN, Math.min(y + 28 + h + 2, L.BOTTOM - 11), W, 11, { size: T.CAPTION, color: C.MUTED });
-    } else {
-      b.text('Tidak ada bisnis yang berisiko atau perlu perhatian pekan ini.', L.MARGIN, y, W, 14, { size: T.BODY, color: C.MUTED });
-    }
+    wkUiHeader(b, text('pelanggan', 'title'), an);
+    wkUiKpiRow(b, cards2.map((k, i) => Object.assign({}, k, { colorIdx: [1, 0, 3][i] })), { left: F.left, top: F.top, width: leftW, height: kpiH });
+    const statusH = 112;
+    const S = wkUiPanel(b, F.left, bodyTop, leftW, statusH, 'STATUS PELANGGAN', `${an.total} kebun · vs pekan lalu`);
+    wkUiStatusBars(b, an, S);
+    const listTop = bodyTop + statusH + G, listH = F.bottom - listTop - (an.reportDays < 7 ? 10 : 0), half = (leftW - G) / 2;
+    const L1 = wkUiPanel(b, F.left, listTop, half, listH, 'KEBUN BARU MULAI', `${an.baru.length} kebun`);
+    wkUiNameList(b, an.baru.map(k => wkShortName(k.name)), L1, WK_UI.COLOR.GOOD);
+    const L2 = wkUiPanel(b, F.left + half + G, listTop, half, listH, 'TANPA AKTIVITAS', `${an.diam.length} kebun`);
+    wkUiNameList(b, an.diam.map(k => wkShortName(k.name) + (k.lastInput ? ` · terakhir ${wkTglPendek(k.lastInput)}` : '')), L2, WK_UI.COLOR.BAD);
+    foot(b, F.bottom - 8);
+    // tinggi panel observasi mengikuti panjang insight (pita pendek), sisanya untuk rencana tindak lanjut
+    const obsText = wkStripBold(text('pelanggan', 'insight'));
+    const obsH = Math.min(130, Math.max(70, 20 + 8 + wkEstLines(obsText, 8.8, rightW - 32, true) * 8.8 * 1.3 + 30));
+    wkUiObservations(b, text('pelanggan', 'insight'), rightL, F.top, rightW, obsH, tag);
+    wkUiActions(b, items, rightL, F.top + obsH + G, rightW, F.bottom - F.top - obsH - G, tl.length - items.length);
   } });
   return specs;
+}
+
+/** Daftar nama berpenanda titik warna; yang tidak muat diringkas "+N lainnya". */
+function wkUiNameList(b, names, A, color) {
+  const C = WK_UI.COLOR, lineH = 11, max = Math.max(1, Math.floor(A.height / lineH));
+  if (!names.length) { b.text('Tidak ada', A.left, A.top, A.width, lineH, { size: 7.6, color: C.MUTED }); return; }
+  const shown = names.length > max ? names.slice(0, max - 1) : names;
+  shown.forEach((n, i) => {
+    b.rect(A.left, A.top + i * lineH + 3.5, 4, 4, { round: true, fill: color });
+    b.text(wkFitLine(n, 7.4, A.width - 8 - 14), A.left + 8, A.top + i * lineH, A.width - 8, lineH, { size: 7.4, color: C.TEXT, valign: 'MIDDLE' });
+  });
+  if (names.length > shown.length) b.text(`+${names.length - shown.length} lainnya (lihat speaker notes)`, A.left + 8, A.top + shown.length * lineH, A.width - 8, lineH, { size: 7, color: C.MUTED, valign: 'MIDDLE' });
 }
 
 /** 3 grafik WAU aplikasi; bila tabel WAU tidak ada, diganti indikator keaktifan input. */

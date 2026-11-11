@@ -9,7 +9,7 @@ const assert = require('assert');
 let uuid = 0;
 const ctx = { console, Utilities: { getUuid: () => `00000000-0000-0000-0000-${String(uuid++).padStart(12, '0')}` } };
 vm.createContext(ctx);
-['WK1_Config.gs', 'WK2_SheetTabel.gs', 'WK3_Analisis.gs', 'WK4_Gambar.gs', 'WK5_Deck.gs', 'WK6_Claude.gs']
+['WK1_Config.gs', 'WK2_SheetTabel.gs', 'WK3_Analisis.gs', 'WK4_Gambar.gs', 'WK5_Deck.gs', 'WK6_Claude.gs', 'WK7_Tampilan.gs']
   .forEach(f => vm.runInContext(fs.readFileSync(`${__dirname}/${f}`, 'utf8'), ctx, { filename: f }));
 const run = code => vm.runInContext(code, ctx);
 
@@ -167,21 +167,17 @@ function checkSlides(an, aiAns, label) {
     assert.ok(sp.notes && sp.notes.trim().length > 0);
     const b = new ctx.WkBatch('p1');
     sp.draw(b);
-    // semua bentuk berada di dalam area slide (footer mulai 382 pt)
-    b.req.filter(r => r.createShape || r.createTable).forEach(r => {
-      const ep = (r.createShape || r.createTable).elementProperties, x = ep.transform.translateX, y = ep.transform.translateY;
+    // semua bentuk berada di area bebas bingkai: x 26–701, di bawah logo/garis (kecuali judul & periode) dan di atas pita hijau (375 pt)
+    b.req.filter(r => r.createShape || r.createTable || r.createLine).forEach(r => {
+      const ep = (r.createShape || r.createTable || r.createLine).elementProperties, x = ep.transform.translateX, y = ep.transform.translateY;
       const w = ep.size.width.magnitude, h = ep.size.height.magnitude;
-      assert.ok(x >= 30 && x + w <= 690 && y >= 15 && y + h <= 385, `[${sp.id}] bentuk keluar area: x=${x.toFixed(1)} y=${y.toFixed(1)} w=${w.toFixed(1)} h=${h.toFixed(1)}`);
+      assert.ok(x >= 18 && x + w <= 709 && y >= 46 && y + h <= 372, `[${sp.id}] bentuk keluar area: x=${x.toFixed(1)} y=${y.toFixed(1)} w=${w.toFixed(1)} h=${h.toFixed(1)}`);
     });
-    // judul grafik kecil muat satu baris (lebar judul ±62% dari kartu ±133 pt)
+    // periode tampil di kotak kanan atas
+    assert.ok(b.req.some(r => r.insertText && /PEKAN INI/.test(r.insertText.text)), `[${sp.id}] periode tidak tampil`);
+    // judul grafik kecil muat satu baris (lebar grafik ±126 pt)
     if (sp.id === 'pemakaian') run('wkUsageCharts(AN)').forEach(k =>
-      assert.ok(run('wkEstWidth')(k.short, 8.4, true) <= (133 - 18) * 0.62, `judul grafik terlalu panjang: ${k.short}`));
-    // tabel slide 2: perkiraan tinggi tidak melewati batas bawah
-    const tbl = b.req.find(r => r.createTable);
-    if (tbl) {
-      const rows = b.req.filter(r => r.insertText && r.insertText.objectId === tbl.createTable.objectId && r.insertText.cellLocation.columnIndex === 0).length - 1;
-      assert.ok(rows >= 1 && rows <= 5, `[${sp.id}] baris tabel ${rows}`);
-    }
+      assert.ok(run('wkEstWidth')(k.short, 8, true) <= 126 - 11, `judul grafik terlalu panjang: ${k.short}`));
     console.log(`- [${sp.id}] ${sp.title}  (${b.req.length} request)\n    NOTES: ${sp.notes.slice(0, 260).replace(/\n/g, ' / ')}${sp.notes.length > 260 ? '…' : ''}`);
   });
   // speaker notes slide 2 memuat SEMUA bisnis bertemuan beserta seluruh temuannya

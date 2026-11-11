@@ -4,14 +4,20 @@ Apps Script yang membuat **deck mingguan 2 slide** untuk stakeholder internal Sa
 
 Template slide-nya sama dengan Monthly Report. Deck weekly adalah **satu file tetap**: generate pertama membuat file baru, lalu generate berikutnya mengganti isi file yang sama, jadi link-nya tidak berubah.
 
-## Isi deck (2 slide)
+## Isi deck (2 slide, tampilan dashboard)
 
-Setiap slide memuat baris tanggal pekan laporan vs pekan pembanding, INSIGHT, dan speaker notes.
+**Bingkai slide.** Slide 1 di file deck weekly adalah **bingkai**: logo, badge *FOR INTERNAL USE ONLY*, kotak periode di kanan atas, dan pita hijau di bawah. Setiap generate, bingkai ini disalin untuk setiap slide isi, lalu dipindah ke **akhir deck dalam keadaan tersembunyi (skip)** supaya tidak tampil saat presentasi dan tidak ikut terhapus. Untuk mengganti logo atau pita, edit slide bingkai itu. Kalau deck belum punya bingkai, script menggambar bingkai sederhana.
+
+**Warna (`WK_UI` di `WK7_Tampilan.gs`):**
+- Kartu KPI diberi aksen warna di sebelah kiri.
+- Perubahan vs pekan lalu: **hijau = membaik, merah = memburuk** (untuk "kebun berisiko", turun = membaik).
+- Judul panel diberi aksen kuning; panel observasi dan rencana tindak lanjut memakai kepala hijau tua.
+- Setiap aplikasi punya warna sendiri: biru = App estate, oranye = TimPRO Mandor, abu gelap = Web Admin. Pekan laporan diberi warna tua di atas kolom yang disorot.
 
 | Slide | Isi |
 |---|---|
-| 1. Pemakaian produk | **3 grafik kecil WAU 8 pekan**, satu per aplikasi dengan skala masing-masing: KebunPRO App (estate), TimPRO Mandor, KebunPRO Web Admin. Setiap grafik menampilkan % vs pekan lalu. Di bawahnya ada kartu **Total WAU (unik)**, **kebun aktif input (x dari N)**, dan **penetrasi akun** (akun aktif ÷ terdaftar), masing-masing dengan % vs pekan lalu dan tren mini. Kartu INSIGHT di kanan. Bila tabel WAU tidak ada, grafik memakai kebun aktif, akun aktif, dan catatan diinput. |
-| 2. Kesehatan pelanggan & tindakan | Pita INSIGHT; kartu **kebun berisiko**, **TBS tercatat**, **nilai penjualan TBS** (dengan % vs pekan lalu); daftar **kebun baru mulai pekan ini** dan **kebun tanpa aktivitas pekan ini** (dengan tanggal input terakhir); tabel **bisnis prioritas** (maks. 5, sebanyak muat) berisi status, semua temuan, tindak lanjut + PIC, dan target. **Speaker notes memuat rincian temuan & tindak lanjut SEMUA bisnis.** |
+| 1. Pemakaian produk | Judul dan periode (*PEKAN INI … vs …*). Kiri: kartu **Total WAU (unik)**, **kebun aktif input**, **penetrasi akun**, lalu panel **Tren WAU per aplikasi · 8 pekan** (App estate, TimPRO Mandor, Web Admin; skala masing-masing; angka pekan ini dan % vs pekan lalu). Kanan: **Observasi utama** berisi kalimat sorotan dan butir-butir. |
+| 2. Kesehatan pelanggan & tindakan | Kiri: kartu **kebun berisiko**, **TBS tercatat**, **nilai penjualan TBS**; panel **Status pelanggan** (batang berisiko / perlu perhatian / sehat dengan perubahan vs pekan lalu); daftar **Kebun baru mulai** dan **Tanpa aktivitas** (dengan tanggal input terakhir). Kanan: **Observasi utama** dan **Rencana tindak lanjut / PIC** (bisnis prioritas bernomor, chip PIC, dan target). **Speaker notes memuat rincian semua bisnis.** |
 
 ## Tabel WAU
 
@@ -47,6 +53,7 @@ Kalau sel AF2 kosong, atau jawaban Claude dibuat untuk data lama (ID_PAKET berbe
 | `WK4_Gambar.gs` | Kartu KPI, grafik mini, tabel, kartu INSIGHT (Google Slides API) |
 | `WK5_Deck.gs` | Menu, file deck tetap, rencana 2 slide, teks otomatis |
 | `WK6_Claude.gs` | Paket data untuk Claude dan pembaca jawaban (sel AF2) |
+| `WK7_Tampilan.gs` | Tampilan dashboard: bingkai, kartu KPI, panel, grafik WAU, observasi, rencana tindak lanjut |
 | `query_weekly_report.sql` | Query Metabase/ClickHouse untuk tabel `Weekly report` |
 | `uji_weekly.js` | Uji lokal: `node uji_weekly.js` |
 
@@ -54,7 +61,7 @@ Semua nama global diawali `WK_` atau `wk`, jadi aman ditempel ke proyek Apps Scr
 
 ## Pemasangan (sekali)
 
-1. Spreadsheet → **Extensions → Apps Script**. Buat file `WK1_Config` s.d. `WK6_Claude`, lalu salin isinya dari repo.
+1. Spreadsheet → **Extensions → Apps Script**. Buat file `WK1_Config` s.d. `WK7_Tampilan`, lalu salin isinya dari repo.
 2. Di `onOpen()` milik monthly (`5_MainController.gs`), tambahkan baris berikut sebelum `}` penutup:
    `if (typeof wkAddMenu === 'function') wkAddMenu();`
 3. Pastikan layanan **Google Slides API** aktif (Services → Google Slides API).
