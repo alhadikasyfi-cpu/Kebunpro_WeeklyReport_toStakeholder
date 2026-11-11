@@ -42,6 +42,8 @@ function wkUi() { try { return SpreadsheetApp.getUi(); } catch (e) { return null
 function wkAlert(msg) { const ui = wkUi(); if (ui) ui.alert(msg); else Logger.log(msg); }
 
 function wkLoad() {
+  const missingFiles = wkCheckFiles();
+  if (missingFiles) return { error: missingFiles };
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = wkGetSheet(ss);
   if (!sheet) return { error: `Sheet '${WK_CONFIG.SHEET_NAME}' belum ada. Jalankan menu "1. Buat / perbaiki header tabel".` };
@@ -163,7 +165,21 @@ function wkRemoveInsightCard(slide) {
   });
 }
 
+/**
+ * Pastikan semua file WK ada di proyek Apps Script (file yang belum dibuat/disimpan memicu ReferenceError).
+ * Mengembalikan pesan error atau '' bila lengkap.
+ */
+function wkCheckFiles() {
+  const need = [
+    ['WK1_Config', typeof WK_CONFIG], ['WK2_SheetTabel', typeof WK_COLUMNS], ['WK3_Analisis', typeof wkAnalyze],
+    ['WK4_Gambar', typeof WkBatch], ['WK6_Claude', typeof wkBuildPacket], ['WK7_Tampilan', typeof WK_UI]
+  ].filter(x => x[1] === 'undefined').map(x => x[0]);
+  return need.length ? `File Apps Script belum ada atau belum disimpan: ${need.join(', ')}.\n\nBuat file dengan nama tersebut di editor Apps Script, salin isinya dari repo (file .gs dengan nama yang sama), lalu simpan (Ctrl+S) dan jalankan ulang.` : '';
+}
+
 function wkGenerateWeeklyDeck() {
+  const missingFiles = wkCheckFiles();
+  if (missingFiles) return wkAlert(missingFiles);
   if (typeof Slides === 'undefined') return wkAlert('Aktifkan layanan "Google Slides API": editor Apps Script > Services (+) > Google Slides API > Add.');
   const lock = LockService.getDocumentLock();
   if (!lock.tryLock(5000)) return wkAlert('Deck weekly sedang dibuat oleh pengguna lain. Coba lagi beberapa menit lagi.');
