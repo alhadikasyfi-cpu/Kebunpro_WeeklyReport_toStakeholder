@@ -205,6 +205,35 @@ function wkLabelPekanHari(key, endDate) {
     `${WK_HARI[b.getDay()]}, ${b.getDate()} ${WK_BULAN[b.getMonth()]} ${b.getFullYear()}`;
 }
 
+/**
+ * Segmen keaktifan kebun pada pekan `week`:
+ *   rutin  = ada input pekan ini, ≥ AKTIF_MIN_HARI hari (atau kolom hari kosong)
+ *   kurang = ada input pekan ini, < AKTIF_MIN_HARI hari
+ *   pasif  = 0 pekan ini, tetapi ada input dalam SEGMENT_WEEKS pekan terakhir
+ *   tidak  = 0 selama SEGMENT_WEEKS pekan atau lebih
+ */
+const WK_SEGMENTS = [
+  { key: 'rutin', name: 'Aktif rutin', note: '≥3 hari input', color: '#15803d', goodDown: false },
+  { key: 'kurang', name: 'Kurang aktif', note: '1–2 hari input', color: '#8fc28f', goodDown: true },
+  { key: 'pasif', name: 'Pasif', note: '0 pekan ini, aktif ≤4 pekan', color: '#d97706', goodDown: true },
+  { key: 'tidak', name: 'Tidak aktif', note: '0 selama ≥4 pekan', color: '#dc2626', goodDown: true }
+];
+
+function wkSegment(by, id, week) {
+  const T = WK_CONFIG.THRESHOLDS, n = T.SEGMENT_WEEKS || 4;
+  const rec = by[`${id}|${week}`];
+  if (rec && wkIsActive(rec)) {
+    const h = rec.hari_aktif_input;
+    return h === null || h === undefined || h >= T.AKTIF_MIN_HARI ? 'rutin' : 'kurang';
+  }
+  const d = wkFromKey(week);
+  for (let j = 1; j < n; j++) {
+    const r = by[`${id}|${wkKey(wkAddDays(d, -7 * j))}`];
+    if (r && wkIsActive(r)) return 'pasif';
+  }
+  return 'tidak';
+}
+
 /** Evaluasi satu kebun pada satu pekan (temuan & status). */
 function wkEvalWeek(info, mine, curRec, prevRec, weekKey, endDate, scale) {
   let lastInput = null;
@@ -279,6 +308,9 @@ function wkAnalyze(rows, today, anchor, wau) {
     return k;
   });
 
+  // Segmen keaktifan tiap kebun tiap pekan (lihat wkSegment)
+  kebun.forEach(k => { k.segments = weeks.map((w, i) => (k.evals[i] ? wkSegment(by, k.id, w) : null)); k.segment = k.segments[weeks.length - 1]; });
+
   // Agregat portofolio per pekan (hanya kebun yang sudah terdaftar pada pekan itu)
   const portfolio = weeks.map((w, i) => {
     const ex = kebun.filter(k => k.evals[i]);
@@ -297,6 +329,7 @@ function wkAnalyze(rows, today, anchor, wau) {
       rataHari: hariKnown && ex.length ? wkSum(ex.map(k => (k.evals[i].curRec && k.evals[i].curRec.hari_aktif_input) || 0)) / ex.length : null,
       catatan: has && wkAnyNum(ms.map(m => m.catatan)) ? wkSum(ms.map(m => m.catatan)) : null,
       // jumlah input per jenis kegiatan (catatan_* di tabel), untuk observasi pemakaian
+      seg: WK_SEGMENTS.reduce((o, sg) => { o[sg.key] = ex.filter(k => k.segments[i] === sg.key).length; return o; }, {}),
       catPanen: sumKey('catatan_panen'), catMuat: sumKey('catatan_muat'), catJual: sumKey('catatan_jual'), catRawat: sumKey('catatan_rawat'),
       ton: sumKey('ton_terjual'), pendapatan: sumKey('pendapatan_rp'), jjgPanen: sumKey('jjg_dipanen'),
       noweightPct: soldAll ? (sumKey('jjg_terjual_tanpa_berat') || 0) / soldAll * 100 : null,

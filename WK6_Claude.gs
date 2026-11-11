@@ -62,6 +62,7 @@ function wkPacketData(an) {
   L.push(row('Total WAU (unik)', 'wauTotal', v => wkFmt(v)));
   L.push(row('Kebun aktif input', 'aktif', v => wkFmt(v)));
   L.push(row('Akun menginput ÷ akun terdaftar (%)', 'penetrasi', v => wkFmt(v, 0)));
+  WK_SEGMENTS.forEach(sg => L.push(`Segmen ${sg.name} (${sg.note}): ` + P.map(p => (p.seg ? wkFmt(p.seg[sg.key] || 0) : '-')).join(' | ')));
   L.push(row('Akun aktif', 'userAktif', v => wkFmt(v)));
   L.push(row('Hari input rata-rata per kebun', 'rataHari', v => wkFmt(v, 1)));
   L.push(row('Catatan diinput (total)', 'catatan', v => wkFmt(v)));
@@ -81,6 +82,9 @@ function wkPacketData(an) {
   tl.slice(0, 40).forEach(k => L.push(`${nm(k)} | ${k.status} | ${wkFmt(k.cur ? k.cur.hari : 0)} (${k.dHari.txt}) | ${wkFmtAuto(k.cur ? k.cur.ton : 0)} (${k.dTon.txt}) | ${k.findings.map(f => f.text).join('; ')} | ${wkFindingRow(k, k.findings).actions.join('; ')}`));
   if (tl.length > 40) L.push(`... dan ${tl.length - 40} kebun lain.`);
   L.push('');
+  L.push('[SEGMEN KEBUN PEKAN INI] ' + WK_SEGMENTS.map(sg => `${sg.name} ${an.kebun.filter(k => k.segment === sg.key).length}`).join(', '));
+  WK_SEGMENTS.filter(sg => sg.key !== 'rutin').forEach(sg =>
+    L.push(`${sg.name}: ` + (an.kebun.filter(k => k.segment === sg.key).map(nm).join(', ') || '-')));
   L.push(`[KEBUN BARU MULAI PEKAN INI] ${an.baru.length}: ` + (an.baru.map(nm).join(', ') || '-'));
   L.push(`[KEBUN TANPA AKTIVITAS PEKAN INI] ${an.diam.length}: ` +
     (an.diam.map(k => `${nm(k)}${k.lastInput ? ` (input terakhir ${wkTglPendek(k.lastInput)})` : ''}`).join(', ') || '-'));
@@ -111,7 +115,7 @@ function wkBuildPacket(an) {
     '- Kalimat pertama langsung temuan + angka. Jangan membuka dengan "Slide ini" / "Berdasarkan data".',
     '',
     'SLIDE:',
-    '1. id "pemakaian": pemakaian produk. 3 grafik kecil WAU 8 pekan (KebunPRO App, TimPRO Mandor, KebunPRO Web Admin) + total WAU, kebun aktif input, akun menginput (persen akun terdaftar yang menginput data). Judul = kesimpulan pemakaian terpenting; insight = kalimat pertama kesimpulan utama, lalu kalimat terpisah untuk: aplikasi mana yang naik/turun dan artinya (owner terlibat? data lapangan masuk?), jumlah input panen, muat, jual, dan rawat pekan ini masing-masing dengan % vs pekan lalu (tidak ada grafiknya, jadi angkanya wajib di sini), dan rata-rata hari input per kebun.',
+    '1. id "pemakaian": pemakaian produk. 3 grafik kecil WAU 8 pekan (KebunPRO App, TimPRO Mandor, KebunPRO Web Admin) + total WAU, kebun aktif input, akun menginput (persen akun terdaftar yang menginput data). Judul = kesimpulan pemakaian terpenting; insight = kalimat pertama kesimpulan utama, lalu kalimat terpisah untuk: aplikasi mana yang naik/turun dan artinya (owner terlibat? data lapangan masuk?), jumlah input panen, muat, jual, dan rawat pekan ini masing-masing dengan % vs pekan lalu (tidak ada grafiknya, jadi angkanya wajib di sini), rata-rata hari input per kebun, dan segmen kebun (aktif rutin / kurang aktif / pasif / tidak aktif) vs pekan lalu.',
     '2. id "pelanggan": kesehatan pelanggan. Kebun berisiko, TBS tercatat, nilai penjualan; tren 8 pekan tonase TBS dan luas dipanen; status pelanggan; kebun baru mulai & tanpa aktivitas; rencana tindak lanjut bisnis prioritas. Judul = jumlah/prioritas tindak lanjut; speaker_notes = ringkasan status pelanggan dan keputusan yang diminta (rincian per bisnis ditambahkan otomatis di bawahnya, jangan diulang satu per satu).',
     '',
     'ISI TIAP SLIDE:',

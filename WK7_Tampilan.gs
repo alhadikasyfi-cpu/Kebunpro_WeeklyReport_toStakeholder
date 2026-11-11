@@ -322,3 +322,33 @@ function wkUiChangeList(b, an, A) {
     b.text(txt, A.left, y + 11, A.width, gh - 12, { size: 7, color: g.items.length ? C.TEXT : C.MUTED, lineSpacing: 115 });
   });
 }
+
+/**
+ * Segmentasi kebun: satu batang bertumpuk (aktif rutin, kurang aktif, pasif, tidak aktif) berisi jumlah kebun,
+ * lalu legenda dengan jumlah dan perubahan vs pekan lalu.
+ */
+function wkUiSegmentBar(b, an, A) {
+  const C = WK_UI.COLOR, W = WK_CONFIG.WEIGHT;
+  const cur = an.cur.seg || {}, prev = an.prev.seg || {};
+  const total = WK_SEGMENTS.reduce((a, sg) => a + (cur[sg.key] || 0), 0) || 1;
+  const barH = 14;
+  let x = A.left;
+  WK_SEGMENTS.forEach(sg => {
+    const v = cur[sg.key] || 0;
+    if (!v) return;
+    const w = A.width * v / total;
+    b.rect(x, A.top, w, barH, { fill: sg.color });
+    if (w >= 14) b.text(String(v), x, A.top, w, barH, { size: 7.4, weight: W.HEAVY, color: '#ffffff', align: 'CENTER', valign: 'MIDDLE' });
+    x += w;
+  });
+  const lw = A.width / WK_SEGMENTS.length, ly = A.top + barH + 5;
+  WK_SEGMENTS.forEach((sg, i) => {
+    const l = A.left + i * lw, d = wkDelta(cur[sg.key] || 0, an.prev.has ? (prev[sg.key] || 0) : null);
+    b.rect(l, ly + 3, 6, 6, { round: true, fill: sg.color });
+    b.text('', l + 9, ly, lw - 10, 11, { valign: 'MIDDLE', segs: [
+      { text: sg.name + ' ', size: 7.2, weight: W.HEAVY, color: C.TEXT },
+      { text: String(cur[sg.key] || 0), size: 7.2, weight: W.HEAVY, color: sg.color === '#8fc28f' ? '#4d7c0f' : sg.color },
+      { text: '  ' + d.txt, size: 6.4, weight: W.HEAVY, color: wkUiDeltaColor({ delta: d, goodDown: sg.goodDown }) }] });
+    b.text(sg.note, l + 9, ly + 10, lw - 10, 9, { size: 6, color: C.MUTED });
+  });
+}

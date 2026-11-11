@@ -16,8 +16,23 @@ Template slide-nya sama dengan Monthly Report. Deck weekly adalah **satu file te
 
 | Slide | Isi |
 |---|---|
-| 1. Pemakaian produk | Judul dan periode (*PEKAN INI … vs …*). Kiri: kartu **Total WAU (unik)**, **kebun aktif input**, **akun menginput** (akun yang menginput data ÷ akun login terdaftar, contoh "Akun menginput (22/136)" = 16%), lalu panel **Tren WAU per aplikasi · 8 pekan** (KebunPRO App, TimPRO Mandor, KebunPRO Web Admin; skala masing-masing; angka pekan ini dan % vs pekan lalu). Kanan: **Observasi utama** berisi kalimat sorotan dan butir-butir. |
+| 1. Pemakaian produk | Judul dan periode (*PEKAN INI … vs …*). Kiri: kartu **Total WAU (unik)**, **kebun aktif input**, **akun menginput** (akun yang menginput data ÷ akun login terdaftar, contoh "Akun menginput (22/136)" = 16%), panel **Tren WAU per aplikasi · 8 pekan** (KebunPRO App, TimPRO Mandor, KebunPRO Web Admin; setiap batang berlabel angka dan tanggal; skala masing-masing; angka pekan ini dan % vs pekan lalu). Kanan: **Observasi utama** berisi kalimat sorotan dan butir-butir. |
 | 2. Kesehatan pelanggan & tindakan | Kiri: kartu **kebun berisiko**, **TBS tercatat**, **nilai penjualan TBS**; panel **Tren produksi · 8 pekan** (tonase TBS dan luas dipanen pekan per pekan); **Status pelanggan** (berisiko / perlu perhatian / sehat dengan perubahan vs pekan lalu) dan **Perubahan pelanggan** (kebun mulai pekan ini dan kebun tanpa aktivitas, dengan tanggal input terakhir). Kanan: **Observasi utama** dan **Rencana tindak lanjut / PIC** (bisnis prioritas bernomor, chip PIC, dan target). **Speaker notes memuat rincian semua bisnis.** |
+
+## Segmentasi kebun (slide 1)
+
+Setiap kebun dikelompokkan pada setiap pekan, jadi segmennya bisa dibandingkan dengan pekan lalu:
+
+| Segmen | Aturan |
+|---|---|
+| **Aktif rutin** | Ada input pekan ini, ≥ 3 hari input (`AKTIF_MIN_HARI`) |
+| **Kurang aktif** | Ada input pekan ini, 1–2 hari input |
+| **Pasif** | Pekan ini 0, tetapi ada input dalam 4 pekan terakhir (`SEGMENT_WEEKS`) |
+| **Tidak aktif** | 0 selama 4 pekan atau lebih |
+
+Tampilannya berupa batang bertumpuk berisi jumlah kebun, dengan legenda yang memuat jumlah dan % vs pekan lalu. Nama kebun di segmen kurang aktif, pasif, dan tidak aktif tertulis di speaker notes slide 1.
+
+Jumlah kebun (pembagi) = semua bisnis yang muncul di hasil query weekly, yaitu yang punya input dalam ±180 hari sebelum periode sampai hari ini. Angka ini **belum** sama dengan jumlah pelanggan yang sedang berlangganan, karena kolom `akhir_langganan` masih kosong.
 
 ## Tabel WAU
 

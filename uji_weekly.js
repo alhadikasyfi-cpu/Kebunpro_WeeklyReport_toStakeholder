@@ -106,6 +106,14 @@ function analyze(values, today) {
   // kebun baru & kebun tanpa aktivitas
   assert.strictEqual(JSON.stringify(an.baru.map(k => k.id)), '["K07"]');
   assert.strictEqual(JSON.stringify(an.diam.map(k => k.id).sort()), '["K03","K06"]');
+  // segmen: K03 & K06 = 0 pekan ini tapi aktif ≤4 pekan -> pasif; sisanya aktif ≥3 hari -> rutin
+  const seg = Object.fromEntries(an.kebun.map(k => [k.id, k.segment]));
+  assert.strictEqual(seg.K03, 'pasif'); assert.strictEqual(seg.K06, 'pasif');
+  assert.strictEqual(seg.K01, 'rutin'); assert.strictEqual(seg.K07, 'rutin');
+  assert.strictEqual(an.cur.seg.rutin + an.cur.seg.kurang + an.cur.seg.pasif + an.cur.seg.tidak, an.cur.kebun);
+  ctx.BY = Object.fromEntries(t.rows.map(r => [`${r.id}|${r.week}`, r]));
+  assert.strictEqual(run(`wkSegment(BY, 'K03', '2026-11-16')`), 'tidak');   // 0 selama ≥4 pekan
+  assert.strictEqual(run(`wkSegment({ 'X|2026-10-19': { hari_aktif_input: 2 } }, 'X', '2026-10-19')`), 'kurang');
   // WAU per aplikasi ikut terbaca per pekan, dengan % vs pekan lalu
   const est = an.kpis.find(k => k.key === 'wauEstate');
   assert.strictEqual(est.raw, 6);

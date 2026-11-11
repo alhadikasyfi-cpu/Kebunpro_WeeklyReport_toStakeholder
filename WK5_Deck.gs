@@ -252,7 +252,8 @@ function wkPlanSlides(an, ai) {
   specs.push({ id: 'pemakaian', title: text('pemakaian', 'title'), notes: text('pemakaian', 'notes'), draw: b => {
     wkUiHeader(b, text('pemakaian', 'title'), an);
     wkUiKpiRow(b, cards.map((k, i) => Object.assign({}, k, { colorIdx: [0, 3, 1][i] })), { left: F.left, top: F.top, width: leftW, height: kpiH });
-    const panelH = F.bottom - bodyTop - (an.reportDays < 7 ? 10 : 0);
+    const segH = 66, panelH = F.bottom - bodyTop - segH - G - (an.reportDays < 7 ? 10 : 0);
+    wkUiSegmentBar(b, an, wkUiPanel(b, F.left, bodyTop + panelH + G, leftW, segH, `SEGMENTASI KEBUN · ${an.cur.kebun} KEBUN`, 'vs pekan lalu'));
     const A = wkUiPanel(b, F.left, bodyTop, leftW, panelH,
       charts.some(k => /^wau/.test(k.key)) ? `TREN WAU PER APLIKASI · ${an.weeks.length} PEKAN` : `TREN KEAKTIFAN · ${an.weeks.length} PEKAN`,
       'kolom hijau = pekan laporan');
@@ -323,6 +324,23 @@ function wkAllBusinessNotes(an) {
   }).join('\n');
 }
 
+/** "Segmen kebun: 12 aktif rutin (▲ 9%), 5 kurang aktif (= 0%), 2 pasif (▲ baru), 1 tidak aktif (= 0%)." */
+function wkSegmentSentence(an) {
+  if (!an.cur.seg) return '';
+  return 'Segmen kebun: ' + WK_SEGMENTS.map(sg => {
+    const d = wkDelta(an.cur.seg[sg.key] || 0, an.prev.has && an.prev.seg ? (an.prev.seg[sg.key] || 0) : null);
+    return `${sg.key === 'rutin' ? '**' : ''}${an.cur.seg[sg.key] || 0} ${sg.name.toLowerCase()}${sg.key === 'rutin' ? '**' : ''} (${d.txt})`;
+  }).join(', ') + '.';
+}
+
+/** Nama kebun per segmen selain aktif rutin (untuk speaker notes). */
+function wkSegmentNames(an) {
+  return WK_SEGMENTS.filter(sg => sg.key !== 'rutin').map(sg => {
+    const list = an.kebun.filter(k => k.segment === sg.key).map(k => k.name);
+    return `${sg.name} (${list.length}): ${list.length ? list.join(', ') : 'tidak ada'}.`;
+  }).join(' ');
+}
+
 /** "Input pekan ini: panen 120 (▲ 8%), muat 80 (▼ 3%), jual 40 (= 0%), rawat 25 (▲ baru); rata-rata 3,4 hari input per kebun (▼ 6%)." */
 function wkInputSentence(an) {
   const K = key => an.kpis.find(k => k.key === key);
@@ -359,12 +377,14 @@ function wkAutoTexts(an) {
     aktif && charts.indexOf(aktif) < 0 ? `Kebun aktif ${aktif.value} dari ${an.cur.kebun} (${aktif.delta.txt})${pen ? `, akun menginput ${kv(pen)} dari akun terdaftar` : ''}.`
       : (pen ? `Akun menginput ${kv(pen)} dari akun terdaftar.` : ''),
     wkInputSentence(an),
+    wkSegmentSentence(an),
     worst && worst.delta.dir < 0 ? `${worst.name} turun paling dalam; perlu dicek penyebabnya pekan ini.`
       : (charts.some(k => /^wau/.test(k.key)) ? 'Tidak ada aplikasi yang turun pekan ini.' : '')
   ].filter(Boolean).join(' ');
   const pemakaianNotes = `Pekan laporan ${an.labelLaporan}, dibanding ${an.labelPembanding}.${partial} ` +
     charts.concat([total, aktif, pen].filter(Boolean)).map(k => trendTxt(k) + '.').join(' ') + ' ' +
-    ['catPanen', 'catMuat', 'catJual', 'catRawat', 'rataHari'].map(K).filter(Boolean).map(k => trendTxt(k) + '.').join(' ');
+    ['catPanen', 'catMuat', 'catJual', 'catRawat', 'rataHari'].map(K).filter(Boolean).map(k => trendTxt(k) + '.').join(' ') +
+    ' ' + wkStripBold(wkSegmentSentence(an)) + ' ' + wkSegmentNames(an);
 
   // 2. Pelanggan
   const pelangganTitle = fit(an.risiko ? `${an.risiko} kebun berisiko, ${an.diam.length} tanpa aktivitas pekan ini`

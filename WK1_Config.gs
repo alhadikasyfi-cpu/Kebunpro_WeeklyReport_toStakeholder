@@ -50,7 +50,8 @@ const WK_CONFIG = {
 
   // Ambang analisis (berlaku sama untuk semua kebun)
   THRESHOLDS: {
-    AKTIF_MIN_HARI: 3,          // hari_aktif_input < 3 hari dalam sepekan -> "input jarang"
+    AKTIF_MIN_HARI: 3,          // hari_aktif_input < 3 hari dalam sepekan -> "input jarang" / segmen "kurang aktif"
+    SEGMENT_WEEKS: 4,           // segmen kebun: pasif = 0 pekan ini tapi aktif dalam 4 pekan terakhir; tidak aktif = 0 selama ≥ 4 pekan
     HARI_TURUN: 3,              // hari aktif turun ≥ 3 hari dari pekan lalu -> perlu perhatian
     LAMA_TANPA_INPUT_HARI: 14,  // input terakhir ≥ 14 hari sebelum akhir pekan -> berisiko
     AKUN_AKTIF_MIN: 0.5,        // akun aktif < 50% akun terdaftar -> akun pasif
