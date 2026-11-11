@@ -1,19 +1,24 @@
 # Weekly Report KebunPRO untuk Stakeholder
 
-Apps Script yang membuat **deck mingguan: 3 slide ringkasan + slide temuan & tindak lanjut per bisnis (maks. 5)** untuk stakeholder internal SawitPRO, yang waktunya sangat sedikit. Deck ini merangkum kesehatan pelanggan KebunPRO, yaitu estate owner, selama satu pekan. Hampir setiap angka dibandingkan dengan **pekan lalu (dalam %)** dan dilengkapi **tren pekan per pekan**.
+Apps Script yang membuat **deck mingguan 2 slide** untuk stakeholder internal SawitPRO, yang waktunya sangat sedikit. Deck ini merangkum kesehatan pelanggan KebunPRO, yaitu estate owner, selama satu pekan. Hampir setiap angka dibandingkan dengan **pekan lalu (dalam %)** dan dilengkapi **tren pekan per pekan**.
 
 Template slide-nya sama dengan Monthly Report. Deck weekly adalah **satu file tetap**: generate pertama membuat file baru, lalu generate berikutnya mengganti isi file yang sama, jadi link-nya tidak berubah.
 
-## Isi deck
+## Isi deck (2 slide)
 
-Setiap slide memuat baris tanggal pekan laporan vs pekan pembanding, kartu INSIGHT, dan speaker notes.
+Setiap slide memuat baris tanggal pekan laporan vs pekan pembanding, INSIGHT, dan speaker notes.
 
 | Slide | Isi |
 |---|---|
-| 1. Ringkasan pekan | 6 kartu KPI. Setiap kartu berisi nilai pekan ini, **% perubahan vs pekan lalu**, grafik mini 8 pekan, dan angka pekan lalu. Prioritas KPI: kebun aktif input, akun aktif, kebun berisiko, perpanjangan ≤30 hari, TBS tercatat, nilai penjualan TBS, lalu hari input per kebun, catatan, dan % janjang tanpa berat (KPI yang datanya kosong dilewati). |
-| 2. Tren pekan per pekan | 4 grafik kecil 8 pekan: kebun aktif, akun aktif, TBS, kebun berisiko. Setiap grafik menampilkan % vs pekan lalu. |
-| 3. Kebun perlu tindak lanjut | Maks. 6 kebun prioritas: status, % perubahan hari input dan TBS, temuan utama, tindak lanjut + PIC (CS / Sales / Agronomi). Sisanya ditulis di speaker notes. |
-| 4–8. Temuan & tindak lanjut per bisnis (sesuai jumlah data, maks. 5 slide) | **Satu baris per bisnis** (kebun pelanggan) yang punya temuan, memuat **semua** temuan dan **semua** tindak lanjutnya (dengan PIC) serta target (berisiko = pekan ini, perlu perhatian = ≤ 2 pekan). Urutan: berisiko dulu. Setiap slide berisi pita INSIGHT, tabel, dan speaker notes yang membahas setiap bisnis. Tabel panjang otomatis lanjut ke slide berikutnya (1/3, 2/3, …), maksimal `MAX_FINDING_SLIDES` (5); bisnis yang tetap tidak muat ditulis "+N bisnis lain" dan dibahas di speaker notes. |
+| 1. Pemakaian produk | **3 grafik kecil WAU 8 pekan**, satu per aplikasi dengan skala masing-masing: KebunPRO App (estate), TimPRO Mandor, KebunPRO Web Admin. Setiap grafik menampilkan % vs pekan lalu. Di bawahnya ada kartu **Total WAU (unik)**, **kebun aktif input (x dari N)**, dan **penetrasi akun** (akun aktif ÷ terdaftar), masing-masing dengan % vs pekan lalu dan tren mini. Kartu INSIGHT di kanan. Bila tabel WAU tidak ada, grafik memakai kebun aktif, akun aktif, dan catatan diinput. |
+| 2. Kesehatan pelanggan & tindakan | Pita INSIGHT; kartu **kebun berisiko**, **TBS tercatat**, **nilai penjualan TBS** (dengan % vs pekan lalu); daftar **kebun baru mulai pekan ini** dan **kebun tanpa aktivitas pekan ini** (dengan tanggal input terakhir); tabel **bisnis prioritas** (maks. 5, sebanyak muat) berisi status, semua temuan, tindak lanjut + PIC, dan target. **Speaker notes memuat rincian temuan & tindak lanjut SEMUA bisnis.** |
+
+## Tabel WAU
+
+Hasil query WAU ditempel di sheet `Weekly report`, di kanan tabel utama (contoh: mulai kolom AI). Header yang dibaca adalah `week_start_date`, `WAU_estate_app`, `WAU_timpro_mandorapp`, `WAU_admin_web`, dan `total_overall_WAU`, dengan satu baris per pekan untuk semua bisnis.
+
+- **Awal pekan:** `week_start_date` harus memakai awal pekan yang sama dengan tabel utama (Senin atau Kamis).
+- **Total WAU:** `total_overall_WAU` dipakai apa adanya. Pastikan angka ini menghitung **pengguna unik** lintas aplikasi, bukan penjumlahan ketiga kolom.
 
 ## Pekan Senin atau Kamis
 
@@ -30,7 +35,7 @@ Judul, INSIGHT, dan speaker notes ditulis Claude dengan cara yang sama seperti m
 2. Tempel jawaban JSON Claude ke sel **AF2 di sheet `Weekly report`**, di kanan tabel data (kolom A–AE). Sel AF1 diberi label kuning secara otomatis.
 3. **4. Generate Weekly Deck.** Nama asli kebun dikembalikan otomatis.
 
-Kalau sel A2 kosong, atau jawaban Claude dibuat untuk data lama (ID_PAKET berbeda), deck tetap jadi dengan **teks otomatis** dari data.
+Kalau sel AF2 kosong, atau jawaban Claude dibuat untuk data lama (ID_PAKET berbeda), deck tetap jadi dengan **teks otomatis** dari data.
 
 ## File
 
@@ -40,7 +45,7 @@ Kalau sel A2 kosong, atau jawaban Claude dibuat untuk data lama (ID_PAKET berbed
 | `WK2_SheetTabel.gs` | Kolom tabel, pembuat header, pembaca tabel, deteksi awal pekan |
 | `WK3_Analisis.gs` | Pekan laporan, perbandingan dengan pekan lalu, tren, status kebun, KPI |
 | `WK4_Gambar.gs` | Kartu KPI, grafik mini, tabel, kartu INSIGHT (Google Slides API) |
-| `WK5_Deck.gs` | Menu, file deck tetap, rencana 3 slide, teks otomatis |
+| `WK5_Deck.gs` | Menu, file deck tetap, rencana 2 slide, teks otomatis |
 | `WK6_Claude.gs` | Paket data untuk Claude dan pembaca jawaban (sel AF2) |
 | `query_weekly_report.sql` | Query Metabase/ClickHouse untuk tabel `Weekly report` |
 | `uji_weekly.js` | Uji lokal: `node uji_weekly.js` |

@@ -220,10 +220,11 @@ function wkEvalWeek(info, mine, curRec, prevRec, weekKey, endDate, scale) {
 }
 
 /**
- * rows: hasil wkParseValues().rows; today: Date; anchor: hari awal pekan (hasil wkParseValues().anchor).
+ * rows: hasil wkParseValues().rows; today: Date; anchor: hari awal pekan (hasil wkParseValues().anchor);
+ * wau: hasil wkParseValues().wau (WAU aplikasi per pekan) atau null.
  * Hasil: {reportWeek, prevWeek, weeks, anchor, kebun, portfolio (per pekan), cur, prev, kpis, warnings, ...}
  */
-function wkAnalyze(rows, today, anchor) {
+function wkAnalyze(rows, today, anchor, wau) {
   const warnings = [];
   const allWeeks = Array.from(new Set(rows.map(r => r.week))).sort();
   if (!allWeeks.length) return null;
@@ -299,6 +300,10 @@ function wkAnalyze(rows, today, anchor) {
       noweightPct: soldAll ? (sumKey('jjg_terjual_tanpa_berat') || 0) / soldAll * 100 : null,
       risiko: ex.length ? ex.filter(k => k.evals[i].status === WK_STATUS.RISIKO).length : null,
       perhatian: ex.length ? ex.filter(k => k.evals[i].status === WK_STATUS.PERHATIAN).length : null,
+      // WAU aplikasi (tabel terpisah, total semua bisnis) dan penetrasi akun (akun aktif ÷ terdaftar)
+      wauEstate: wau && wau[w] ? wau[w].estate : null, wauMandor: wau && wau[w] ? wau[w].mandor : null,
+      wauAdmin: wau && wau[w] ? wau[w].admin : null, wauTotal: wau && wau[w] ? wau[w].total : null,
+      penetrasi: sumKey('user_terdaftar') ? (sumKey('user_aktif') || 0) / sumKey('user_terdaftar') * 100 : null,
       renewal: withAkhir.length ? withAkhir.filter(k => {
         const sisa = wkDaysBetween(end, k.info.akhir_langganan);
         return sisa >= 0 && sisa <= WK_CONFIG.THRESHOLDS.LANGGANAN_HARI;
@@ -315,6 +320,12 @@ function wkAnalyze(rows, today, anchor) {
     labelPembanding: wkLabelPekanHari(prevWeek)
   };
   an.kpis = wkBuildKpis(an);
+  if (wau && !wau[reportWeek]) warnings.push(`Tabel WAU tidak memuat pekan laporan (${wkLabelPekanHari(reportWeek)}); grafik WAU tampil kosong untuk pekan itu.`);
+  if (!wau) warnings.push('Tabel WAU (week_start_date, WAU_estate_app, ...) tidak ditemukan; slide 1 memakai keaktifan input sebagai pengganti WAU.');
+  // kebun BARU mulai pekan ini: aktif pekan ini dan belum pernah aktif sebelumnya; kebun TANPA AKTIVITAS pekan ini
+  const isAct = r => !!(r && wkIsActive(r));
+  an.baru = kebun.filter(k => isAct(k.curRec) && !rows.some(r => r.id === k.id && r.week < reportWeek && isAct(r)));
+  an.diam = kebun.filter(k => !isAct(k.curRec)).sort((a, b) => (a.lastInput || 0) - (b.lastInput || 0));
   return an;
 }
 
@@ -324,27 +335,32 @@ function wkAnalyze(rows, today, anchor) {
  * isPct: angka berupa persen -> perubahan dalam poin persen (pp). goodDown: turun = baik.
  */
 const WK_KPI_DEFS = [
-  { key: 'aktif', name: 'Kebun aktif input', unit: an => `dari ${an.cur.kebun}`, fmt: v => wkFmt(v), why: 'adopsi: kebun yang benar-benar memakai KebunPRO' },
-  { key: 'userAktif', name: 'Akun aktif', unit: an => (an.cur.userTerdaftar ? `dari ${wkFmt(an.cur.userTerdaftar)}` : 'akun'), fmt: v => wkFmt(v), why: 'penetrasi pengguna di kebun pelanggan' },
+  { key: 'wauEstate', short: 'App estate', name: 'KebunPRO App (estate)', unit: () => 'pengguna', fmt: v => wkFmt(v), why: 'keterlibatan owner/estate (pihak yang berlangganan)' },
+  { key: 'wauMandor', short: 'TimPRO Mandor', name: 'TimPRO Mandor', unit: () => 'pengguna', fmt: v => wkFmt(v), why: 'aktivitas lapangan: data panen, muat, rawat masuk dari kebun' },
+  { key: 'wauAdmin', short: 'Web Admin', name: 'KebunPRO Web Admin', unit: () => 'pengguna', fmt: v => wkFmt(v), why: 'pekerjaan back-office: penjualan, biaya, laporan' },
+  { key: 'wauTotal', name: 'Total WAU (unik)', unit: () => 'pengguna', fmt: v => wkFmt(v), why: 'pengguna aktif mingguan semua aplikasi' },
+  { key: 'aktif', short: 'Kebun aktif', name: 'Kebun aktif input', unit: an => `dari ${an.cur.kebun}`, fmt: v => wkFmt(v), why: 'adopsi: kebun yang benar-benar memakai KebunPRO' },
+  { key: 'penetrasi', name: 'Penetrasi akun', unit: () => '%', fmt: v => wkFmt(v, 0), isPct: true, why: 'akun aktif dibanding akun terdaftar' },
+  { key: 'userAktif', short: 'Akun aktif', name: 'Akun aktif', unit: an => (an.cur.userTerdaftar ? `dari ${wkFmt(an.cur.userTerdaftar)}` : 'akun'), fmt: v => wkFmt(v), why: 'penetrasi pengguna di kebun pelanggan' },
   { key: 'risiko', name: 'Kebun berisiko', unit: () => 'kebun', fmt: v => wkFmt(v), goodDown: true, why: 'risiko churn' },
   { key: 'renewal', name: 'Perpanjangan ≤30 hari', unit: () => 'kebun', fmt: v => wkFmt(v), goodDown: true, why: 'langganan yang perlu ditindaklanjuti sales' },
-  { key: 'ton', name: 'TBS tercatat terjual', unit: () => 'ton', fmt: v => wkFmtAuto(v), prorate: true, why: 'nilai operasional yang dikelola lewat platform' },
+  { key: 'ton', name: 'TBS tercatat', unit: () => 'ton', fmt: v => wkFmtAuto(v), prorate: true, why: 'nilai operasional yang dikelola lewat platform' },
   { key: 'pendapatan', name: 'Nilai penjualan TBS', unit: () => '', fmt: v => wkFmtRp(v), prorate: true, why: 'nilai transaksi pelanggan yang tercatat' },
   { key: 'rataHari', name: 'Hari input / kebun', unit: () => 'hari', fmt: v => wkFmt(v, 1), prorate: true, why: 'kedalaman pemakaian harian' },
-  { key: 'catatan', name: 'Catatan diinput', unit: () => 'catatan', fmt: v => wkFmt(v), prorate: true, why: 'volume transaksi di aplikasi' },
+  { key: 'catatan', short: 'Catatan', name: 'Catatan diinput', unit: () => 'catatan', fmt: v => wkFmt(v), prorate: true, why: 'volume transaksi di aplikasi' },
   { key: 'noweightPct', name: 'Janjang tanpa berat', unit: () => '%', fmt: v => wkFmt(v, 1), isPct: true, goodDown: true, why: 'kualitas data pelanggan' }
 ];
 
+/** Semua indikator yang datanya ada pada pekan laporan (urutan WK_KPI_DEFS); slide memilih berdasarkan key. */
 function wkBuildKpis(an) {
-  const max = WK_CONFIG.KPI_COUNT || 6;
-  return WK_KPI_DEFS.filter(d => an.cur[d.key] !== null && an.cur[d.key] !== undefined).slice(0, max).map(d => {
+  return WK_KPI_DEFS.filter(d => an.cur[d.key] !== null && an.cur[d.key] !== undefined).map(d => {
     const cur = an.cur[d.key], prevRaw = an.prev[d.key];
     const prev = prevRaw === null || prevRaw === undefined ? null : (d.prorate ? prevRaw * an.scale : prevRaw);
     const delta = wkDelta(cur, prev, d.isPct);
     // "Rp1,25 miliar" -> angka "Rp1,25" + satuan "miliar" agar angka besar muat di kartu
     const full = d.fmt(cur), m = d.unit(an) ? null : full.match(/^(.*) (juta|miliar)$/);
     return {
-      key: d.key, name: d.name, why: d.why, value: m ? m[1] : full, raw: cur, unit: m ? m[2] : d.unit(an), delta, goodDown: !!d.goodDown,
+      key: d.key, name: d.name, short: d.short || d.name, why: d.why, value: m ? m[1] : full, raw: cur, unit: m ? m[2] : d.unit(an), delta, goodDown: !!d.goodDown,
       prevRaw, prevTxt: prevRaw === null || prevRaw === undefined ? 'Pekan lalu: -'
         // pekan berjalan: pembanding volume ditampilkan versi setara jumlah hari (*), dijelaskan di baris tanggal slide
         : (d.prorate && an.scale < 1 ? `Pekan lalu* ${d.fmt(prev)}` : `Pekan lalu ${d.fmt(prevRaw)}${d.unit(an) === '%' ? '%' : ''}`),

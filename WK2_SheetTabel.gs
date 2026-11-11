@@ -49,6 +49,9 @@ const WK_COLUMNS = [
   { key: 'catatan_cs', group: 'tim', type: 'text', note: 'OPSIONAL: catatan singkat CS (maks. ±80 karakter).' }
 ];
 
+// Tabel WAU aplikasi per pekan (hasil query WAU, ditempel di kanan tabel utama). Nama header (huruf kecil).
+const WK_WAU_COLUMNS = { week: 'week_start_date', estate: 'wau_estate_app', mandor: 'wau_timpro_mandorapp', admin: 'wau_admin_web', total: 'total_overall_wau' };
+
 const WK_GROUP_COLOR = { id: '#007200', aktif: '#1f6f8b', produksi: '#4c9a4c', uang: '#8a6d00', mutu: '#c0392b', tim: '#595959' };
 const WK_NUMBER_FORMAT = { date: 'yyyy-mm-dd', text: '@', int: '#,##0', num: '#,##0.00' };
 
@@ -163,7 +166,7 @@ function wkParseValues(values) {
   const seen = {};
   for (let r = hr + 1; r < values.length; r++) {
     const row = values[r];
-    if (row.every(wkBlank)) continue;
+    if (Object.keys(col).every(key => wkBlank(row[col[key]]))) continue;   // baris kosong di tabel utama (tabel WAU di kanan boleh terisi)
     if (wkNorm(row[col.week_start]) === 'week_start') continue;   // header ikut tertempel lagi
     const d = wkDate(row[col.week_start]);
     const id = String(wkBlank(row[col.kebun_id]) ? row[col.nama_kebun] : row[col.kebun_id]).trim();
@@ -178,6 +181,7 @@ function wkParseValues(values) {
     out.rows.push(rec);
   }
   out.anchor = wkDetectAnchor(out.rows.map(x => x.rawDate));
+  out.wau = wkParseWau(values, out.anchor, out.warnings);
   out.rows.forEach(x => {
     x.weekDate = wkSnapWeek(x.rawDate, out.anchor);
     x.week = wkKey(x.weekDate);
@@ -189,6 +193,33 @@ function wkParseValues(values) {
   const last = {};
   out.rows.forEach(x => { last[`${x.id}|${x.week}`] = x; });
   out.rows = out.rows.filter(x => last[`${x.id}|${x.week}`] === x);
+  return out;
+}
+
+/**
+ * Tabel WAU aplikasi (boleh di sheet yang sama, mis. kolom AI–AO): header week_start_date, WAU_estate_app,
+ * WAU_timpro_mandorapp, WAU_admin_web, total_overall_WAU; satu baris per pekan untuk semua bisnis.
+ * Hasil: {'yyyy-mm-dd' (awal pekan): {estate, mandor, admin, total}} atau null bila tabel tidak ada.
+ */
+function wkParseWau(values, anchor, warnings) {
+  let hr = -1, c0 = -1;
+  for (let r = 0; r < Math.min(values.length, 20) && hr < 0; r++) {
+    const i = values[r].findIndex(v => wkNorm(v) === WK_WAU_COLUMNS.week);
+    if (i >= 0) { hr = r; c0 = i; }
+  }
+  if (hr < 0) return null;
+  const header = values[hr].map(wkNorm);
+  const col = {};
+  Object.keys(WK_WAU_COLUMNS).forEach(k => { col[k] = header.indexOf(WK_WAU_COLUMNS[k]); });
+  const out = {};
+  for (let r = hr + 1; r < values.length; r++) {
+    const d = wkDate(values[r][c0]);
+    if (!d) continue;
+    const week = wkKey(wkSnapWeek(d, anchor));
+    const num = k => (col[k] >= 0 ? wkNum(values[r][col[k]]) : null);
+    out[week] = { estate: num('estate'), mandor: num('mandor'), admin: num('admin'), total: num('total') };
+  }
+  if (!Object.keys(out).length) { warnings.push('Tabel WAU ditemukan tetapi belum berisi data.'); return null; }
   return out;
 }
 

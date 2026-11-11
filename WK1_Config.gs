@@ -33,22 +33,18 @@ const WK_CONFIG = {
   // Kurang dari itu, yang dilaporkan adalah pekan SEBELUMNYA (contoh pekan Kamis: Kamis–Minggu -> pekan lalu,
   // mulai Senin -> pekan berjalan dengan pembanding pekan lalu disetarakan jumlah harinya).
   MIN_DAYS_CURRENT_WEEK: 5,
-  // Deck stakeholder dibatasi 3 slide isi. true = tambahkan cover & penutup dari template (jadi 5 slide).
+  // Deck stakeholder 2 slide isi. true = tambahkan cover & penutup dari template (jadi 4 slide).
   WITH_COVER_CLOSING: false,
   // Jumlah pekan di grafik & perhitungan tren (termasuk pekan laporan).
   TREND_WEEKS: 8,
   // Minimal pekan berisi data agar tren dihitung; di bawah ini tren = "data kurang".
   MIN_WEEKS_FOR_TREND: 4,
 
-  // Maksimal baris tabel kebun di slide 3 (sisanya ditulis di speaker notes).
-  ROWS_FOLLOWUP: 6,
-  // Slide tambahan "Temuan & tindak lanjut" untuk SEMUA kebun, dikelompokkan per tema (keaktifan, pencatatan, produksi).
-  // Maksimal jumlah slide tambahan; kebun yang tidak muat dirinci di speaker notes slide terakhir kelompoknya.
-  MAX_FINDING_SLIDES: 5,
+  // Maksimal baris tabel bisnis prioritas di slide 2 (baris juga dibatasi tinggi slide). Rincian SEMUA bisnis
+  // (temuan + tindak lanjut) selalu ada di speaker notes slide 2.
+  ROWS_FOLLOWUP: 5,
   // Target tindak lanjut: kebun/temuan berisiko vs perlu perhatian
   FINDING_TARGET: { risiko: 'Pekan ini', perhatian: '≤ 2 pekan' },
-  // Jumlah kartu KPI di slide 1 (dipilih berurutan dari WK_KPI_DEFS yang datanya tersedia).
-  KPI_COUNT: 6,
   // Samarkan nama kebun (KEBUN_01, ...) di paket data untuk Claude; nama asli dikembalikan saat jawaban dibaca.
   ANONYMIZE_FOR_AI: true,
 
@@ -84,7 +80,6 @@ const WK_CONFIG = {
   LAYOUT: {
     MARGIN: 40.5, RIGHT: 679.5, BODY_TOP: 84, BOTTOM: 373,
     PERIOD_Y: 62.5,        // baris tanggal pekan laporan vs pembanding, tepat di bawah garis judul
-    FINDING_TABLE_TOP: 124,   // slide temuan: ringkasan (INSIGHT) satu pita di atas, tabel mulai di sini
     TITLE: { left: 40.5, top: 22.5, width: 639, height: 27 },
     CONTENT: { left: 40.5, top: 84, width: 415.5, height: 289 },
     INSIGHT: { left: 471.75, top: 84, width: 207.75, height: 289, pad: 13.5 },

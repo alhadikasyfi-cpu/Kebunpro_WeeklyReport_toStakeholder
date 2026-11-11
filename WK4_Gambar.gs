@@ -279,3 +279,45 @@ function wkDrawStrip(b, text, top, height) {
   b.text('', L.MARGIN + P, top + 5, W - 2 * P, height - 10, { segs: [{ text: 'INSIGHT  ', size: T.CAPTION, weight: WK_CONFIG.WEIGHT.HEAVY, color: C.GREEN }]
     .concat(wkBoldSegs(text, T.BODY, C.INK)), valign: 'MIDDLE', lineSpacing: 125 });
 }
+
+/**
+ * Kartu KPI ringkas (tanpa grafik mini): LABEL → angka (+satuan) → % vs pekan lalu (+ angka pekan lalu).
+ * kpis: hasil wkBuildKpis(); area: {left, top, width, height}
+ */
+function wkDrawCompactCards(b, kpis, area) {
+  const C = WK_CONFIG.COLOR, T = WK_CONFIG.TYPE, W = WK_CONFIG.WEIGHT, gap = 8, P = 9;
+  const n = kpis.length, w = (area.width - gap * (n - 1)) / n, inner = w - 2 * P;
+  kpis.forEach((k, i) => {
+    const left = area.left + i * (w + gap), top = area.top;
+    b.rect(left, top, w, area.height, { round: true, fill: C.TINT, border: C.BORDER });
+    b.text(String(k.name).toUpperCase(), left + P, top + P, inner, 11, { size: T.KPI_LABEL, weight: W.TITLE, color: C.MUTED });
+    const unitW = k.unit ? wkEstWidth(' ' + k.unit, T.KPI_UNIT, true) : 0;
+    const vs = [22, 18, 15].find(sz => wkEstWidth(k.value, sz, true) + unitW <= inner) || 15;
+    const segs = [{ text: String(k.value), size: vs, weight: W.HEAVY, color: C.GREEN }];
+    if (k.unit) segs.push({ text: ' ' + k.unit, size: T.KPI_UNIT, weight: W.STRONG, color: C.MUTED });
+    b.text('', left + P, top + P + 13, inner, 24, { segs, valign: 'BOTTOM' });
+    b.text('', left + P, top + area.height - P - 12, inner, 12, { segs: [
+      { text: k.delta.txt, size: T.BODY, weight: W.HEAVY, color: wkDeltaColor(k.delta, k.goodDown) },
+      { text: ' · ' + k.prevTxt.replace(/^Pekan lalu/, 'lalu'), size: T.CAPTION, weight: W.STRONG, color: C.MUTED }] });
+  });
+}
+
+/** Kotak daftar nama (mis. kebun baru / tanpa aktivitas): judul + jumlah, lalu nama dipisah koma (sisanya "+N lainnya"). */
+function wkDrawListBox(b, title, items, l, t, w, h, accent) {
+  const C = WK_CONFIG.COLOR, T = WK_CONFIG.TYPE, W = WK_CONFIG.WEIGHT, P = 9, inner = w - 2 * P;
+  b.rect(l, t, w, h, { round: true, fill: C.SURFACE, border: C.BORDER });
+  b.rect(l, t + 6, 3, h - 12, { fill: accent || C.GREEN });
+  b.text('', l + P, t + P - 2, inner, 12, { segs: [
+    { text: title, size: T.CAPTION, weight: W.HEAVY, color: C.INK },
+    { text: `  ${items.length} kebun`, size: T.CAPTION, weight: W.HEAVY, color: accent || C.GREEN }] });
+  // isi sebanyak muat di kotak (perkiraan baris), sisanya diringkas "+N lainnya"
+  const maxLines = Math.max(1, Math.floor((h - P - 14 - P + 2) / (T.CAPTION * 1.3)));
+  let shown = items.slice(), txt = '';
+  for (;;) {
+    const rest = items.length - shown.length;
+    txt = shown.length ? shown.join(', ') + (rest ? `, +${rest} lainnya` : '') : (items.length ? `${items.length} kebun` : 'Tidak ada');
+    if (!shown.length || wkEstLines(txt, T.CAPTION, inner) <= maxLines) break;
+    shown.pop();
+  }
+  b.text(txt, l + P, t + P + 14, inner, h - P - 14 - P + 4, { size: T.CAPTION, color: C.MUTED, lineSpacing: 120 });
+}

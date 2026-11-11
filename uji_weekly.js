@@ -34,17 +34,20 @@ const kebun = [
   { id: 'K03', nama: 'KPS Pagowan', hari: 3, ton: 12, akhir: '2027-01-31', stopLast: 2 }, // tidak input 2 pekan terakhir
   { id: 'K04', nama: 'KT Segati Kiri', hari: 4, ton: 6, akhir: '2027-03-01', noweight: 0.6 }, // banyak tanpa berat
   { id: 'K05', nama: 'Pak Wie', hari: 5, ton: 20, akhir: '2027-05-01', drop: true },        // TBS turun tajam pekan laporan
-  { id: 'K06', nama: 'Julfi', hari: 2, ton: 8, akhir: '2027-05-01', missingLast: true }     // tidak ada baris pekan laporan
+  { id: 'K06', nama: 'Julfi', hari: 2, ton: 8, akhir: '2027-05-01', missingLast: true },    // tidak ada baris pekan laporan
+  { id: 'K07', nama: 'Mutiara', hari: 4, ton: 15, akhir: '2027-09-01', startAtReport: true } // kebun baru mulai pekan laporan
 ];
+const WAU_HEAD = ['week_start_date', 'week_period', 'WAU_estate_app', 'WAU_timpro_mandorapp', 'WAU_admin_web', 'total_overall_WAU', 'business_names'];
 /** first: tanggal awal pekan pertama; reportIdx: indeks pekan laporan; partialDays: hari pekan terakhir (7 = penuh). */
-function makeValues(first, reportIdx, partialDays) {
-  const values = [header];
+function makeValues(first, reportIdx, partialDays, withWau) {
+  const values = [header.slice()];
   for (let wi = 0; wi < 9; wi++) {
     const w = new Date(first.getFullYear(), first.getMonth(), first.getDate() + 7 * wi);
     const f = wi === 8 ? partialDays / 7 : 1;
     kebun.forEach(k => {
       const isReport = wi === reportIdx, idleWeek = k.stopLast && wi > reportIdx - k.stopLast;
       if (k.missingLast && wi >= reportIdx) return;
+      if (k.startAtReport && wi < reportIdx) return;
       const hari = idleWeek ? 0 : Math.min(k.hari, wi === 8 ? partialDays : 7);
       const ton = idleWeek ? 0 : k.ton * f * (1 + 0.03 * wi) * (k.drop && isReport ? 0.5 : 1);
       const sold = Math.round(ton * 1000 / 14), nw = k.noweight ? Math.round(sold * k.noweight / (1 - k.noweight)) : 0;
@@ -62,6 +65,17 @@ function makeValues(first, reportIdx, partialDays) {
     });
   }
   values.push(header.map(() => ''));
+  if (withWau !== false) {
+    // tabel WAU 3 kolom kosong di kanan tabel utama (seperti AI–AO), satu baris per pekan; pekan laporan: estate turun
+    const width = header.length + 3 + WAU_HEAD.length, c0 = header.length + 3;
+    values.forEach(r => { while (r.length < width) r.push(''); });
+    WAU_HEAD.forEach((h, i) => { values[0][c0 + i] = h; });
+    for (let wi = 0; wi < 9; wi++) {
+      const w = new Date(first.getFullYear(), first.getMonth(), first.getDate() + 7 * wi);
+      const estate = wi === reportIdx ? 6 : 8 + (wi % 2), mandor = 40 + wi * 2, admin = 9;
+      [w, `W${wi}`, estate, mandor, admin, estate + mandor + admin - 4, 'All Business'].forEach((v, i) => { values[1 + wi][c0 + i] = v; });
+    }
+  }
   return values;
 }
 
@@ -70,7 +84,7 @@ function analyze(values, today) {
   ctx.TODAY = today;
   const t = run('T = wkParseValues(VALUES)');
   assert.strictEqual(t.errors.length, 0, t.errors.join());
-  const an = run('AN = wkAnalyze(T.rows, TODAY, T.anchor); AN.alias = wkAliasMap(AN); AN');
+  const an = run('AN = wkAnalyze(T.rows, TODAY, T.anchor, T.wau); AN.alias = wkAliasMap(AN); AN');
   return { t, an };
 }
 
@@ -78,6 +92,7 @@ function analyze(values, today) {
 {
   const { t, an } = analyze(makeValues(new Date(2026, 7, 31), 7, 3), new Date(2026, 9, 28));
   assert.strictEqual(t.anchor, 1);
+  assert.ok(!t.warnings.some(w => /dilewati/.test(w)), 'baris yang hanya berisi tabel WAU tidak boleh jadi peringatan');
   assert.strictEqual(an.reportWeek, '2026-10-19');
   assert.strictEqual(an.reportDays, 7);
   assert.strictEqual(an.labelLaporan, 'Senin, 19 Okt – Minggu, 25 Okt 2026');
@@ -87,7 +102,15 @@ function analyze(values, today) {
   assert.strictEqual(st.K03.status, 'berisiko');
   assert.ok(st.K04.findings.some(f => f.code === 'tanpa_berat'));
   assert.ok(st.K05.findings.some(f => f.code === 'tbs_turun'));
-  assert.strictEqual(an.cur.aktif, 4);
+  assert.strictEqual(an.cur.aktif, 5);
+  // kebun baru & kebun tanpa aktivitas
+  assert.strictEqual(JSON.stringify(an.baru.map(k => k.id)), '["K07"]');
+  assert.strictEqual(JSON.stringify(an.diam.map(k => k.id).sort()), '["K03","K06"]');
+  // WAU per aplikasi ikut terbaca per pekan, dengan % vs pekan lalu
+  const est = an.kpis.find(k => k.key === 'wauEstate');
+  assert.strictEqual(est.raw, 6);
+  assert.strictEqual(est.delta.txt, '▼ 25%');
+  assert.ok(an.kpis.find(k => k.key === 'penetrasi'));
   // risiko punya tren pekan per pekan
   assert.ok(an.portfolio.every(p => p.risiko !== null));
   console.log('Pekan Senin:', an.labelLaporan, '| KPI:', an.kpis.map(k => `${k.name} ${k.value} ${k.unit} ${k.delta.txt}`).join(' · '));
@@ -121,82 +144,54 @@ assert.ok(!/Becquini|Pagowan|Pak Wie/.test(pk.text), 'nama kebun asli tidak bole
 assert.ok(/KEBUN_0\d/.test(pk.text));
 const alias = A.alias[A.kebun.find(k => k.id === 'K03').id];
 const answer = 'Berikut jawabannya:\n```json\n' + JSON.stringify({ packet_id: pk.id, slides: [
-  { id: 'ringkasan', title: '4 dari 6 kebun aktif, 1 berisiko', insight: `**4 kebun** aktif (▼ 20%). ${alias} berhenti input.`, speaker_notes: `Catatan untuk ${alias}.` },
-  { id: 'tren', title: 'Judul yang terlalu panjang sekali sampai melewati batas empat puluh tujuh karakter', insight: 'Tren stabil.', speaker_notes: 'x' },
-  { id: 'tindak', title: '5 kebun perlu tindak lanjut', insight: 'Prioritas.', speaker_notes: 'y' }] }) + '\n```';
+  { id: 'pemakaian', title: 'WAU estate turun 25%, mandor naik', insight: `**WAU estate 6** (▼ 25%). ${alias} berhenti input.`, speaker_notes: `Catatan untuk ${alias}.` },
+  { id: 'pelanggan', title: 'Judul yang terlalu panjang sekali sampai melewati batas empat puluh tujuh karakter', insight: 'Dua kebun berisiko.', speaker_notes: 'Ringkasan status.' }] }) + '\n```';
 ctx.ANS = answer;
 const warn = [];
 ctx.WARN = warn;
 const ai = run('wkReadAiAnswer(ANS, AN, WARN)');
-assert.ok(ai.ringkasan.insight.includes('KPS Pagowan'), 'nama asli dikembalikan');
-assert.strictEqual(ai.tren.title, null);   // judul kepanjangan -> judul otomatis
+assert.ok(ai.pemakaian.insight.includes('KPS Pagowan'), 'nama asli dikembalikan');
+assert.strictEqual(ai.pelanggan.title, null);   // judul kepanjangan -> judul otomatis
 assert.ok(warn.some(w => /lebih dari 47/.test(w)));
-const stale = run(`wkReadAiAnswer(ANS.replace('${pk.id}', 'deadbeef'), AN, [])`);
-assert.strictEqual(stale, null);
+assert.strictEqual(run(`wkReadAiAnswer(ANS.replace('${pk.id}', 'deadbeef'), AN, [])`), null);
 
-// ---- rencana 3 slide (teks otomatis & teks Claude)
-[null, ai].forEach((aiAns, idx) => {
+// ---- rencana 2 slide (teks otomatis & teks Claude), data contoh dan data besar
+function checkSlides(an, aiAns, label) {
+  ctx.AN = an;
   ctx.AI = aiAns;
   const specs = run('wkPlanSlides(AN, AI)');
-  assert.ok(specs.length >= 3 && specs.length <= 8, `jumlah slide ${specs.length}`);
-  console.log(idx ? '\n--- dengan jawaban Claude' : '\n--- teks otomatis');
+  assert.strictEqual(specs.map(s => s.id).join(), 'pemakaian,pelanggan');
+  console.log(`\n--- ${label}`);
   specs.forEach(sp => {
     assert.ok(sp.title.length <= 47, `judul terlalu panjang: ${sp.title}`);
     assert.ok(sp.notes && sp.notes.trim().length > 0);
     const b = new ctx.WkBatch('p1');
     sp.draw(b);
-    assert.ok(b.req.length > 0);
-    // semua bentuk berada di dalam slide 720 × 405 pt (footer mulai 382 pt)
+    // semua bentuk berada di dalam area slide (footer mulai 382 pt)
     b.req.filter(r => r.createShape || r.createTable).forEach(r => {
       const ep = (r.createShape || r.createTable).elementProperties, x = ep.transform.translateX, y = ep.transform.translateY;
       const w = ep.size.width.magnitude, h = ep.size.height.magnitude;
       assert.ok(x >= 30 && x + w <= 690 && y >= 15 && y + h <= 385, `[${sp.id}] bentuk keluar area: x=${x.toFixed(1)} y=${y.toFixed(1)} w=${w.toFixed(1)} h=${h.toFixed(1)}`);
     });
-    console.log(`- [${sp.id}] ${sp.title}  (${b.req.length} request)\n    NOTES: ${sp.notes.slice(0, 220)}${sp.notes.length > 220 ? '…' : ''}`);
+    // judul grafik kecil muat satu baris (lebar judul ±62% dari kartu ±133 pt)
+    if (sp.id === 'pemakaian') run('wkUsageCharts(AN)').forEach(k =>
+      assert.ok(run('wkEstWidth')(k.short, 8.4, true) <= (133 - 18) * 0.62, `judul grafik terlalu panjang: ${k.short}`));
+    // tabel slide 2: perkiraan tinggi tidak melewati batas bawah
+    const tbl = b.req.find(r => r.createTable);
+    if (tbl) {
+      const rows = b.req.filter(r => r.insertText && r.insertText.objectId === tbl.createTable.objectId && r.insertText.cellLocation.columnIndex === 0).length - 1;
+      assert.ok(rows >= 1 && rows <= 5, `[${sp.id}] baris tabel ${rows}`);
+    }
+    console.log(`- [${sp.id}] ${sp.title}  (${b.req.length} request)\n    NOTES: ${sp.notes.slice(0, 260).replace(/\n/g, ' / ')}${sp.notes.length > 260 ? '…' : ''}`);
   });
-});
-// ---- slide temuan: SEMUA kebun & SEMUA temuan dibahas (di tabel atau, bila tidak muat, di speaker notes)
-function checkFindings(an, label) {
-  ctx.AN = an;
-  const pages = run('wkFindingPages(AN)');
-  const specs = run('wkPlanSlides(AN, null)');
-  const fSpecs = specs.filter(s => s.id.indexOf('temuan_') === 0);
-  assert.strictEqual(fSpecs.length, pages.length);
-  assert.ok(pages.length <= Math.max(5, 3), `${label}: slide temuan maks 5 (${pages.length})`);
-  an.kebun.filter(k => k.findings.length).forEach(k => k.findings.forEach(f => {
-    const pg = pages.find(p => !p.group.codes || p.group.codes.indexOf(f.code) >= 0);
-    assert.ok(pg, `${label}: kelompok untuk ${f.code}`);
-    const shown = pages.some(p => p.rows.concat(p.overflow).some(r => r.k === k && r.findings.indexOf(f) >= 0));
-    assert.ok(shown, `${label}: temuan ${k.name} / ${f.text} tidak dibahas`);
-    const inNotes = fSpecs.some(s => s.notes.indexOf(k.name) >= 0 && s.notes.indexOf(f.text) >= 0);
-    assert.ok(inNotes, `${label}: speaker notes tidak memuat ${k.name} / ${f.text}`);
-  }));
-  const listed = [].concat.apply([], pages.map(p => p.rows.concat(p.overflow))).map(r => r.k.id);
-  assert.strictEqual(listed.length, new Set(listed).size, `${label}: bisnis muncul lebih dari sekali`);
-  assert.strictEqual(listed.length, an.kebun.filter(k => k.findings.length).length, `${label}: tidak semua bisnis bertemuan dibahas`);
-  fSpecs.forEach(sp => {
-    assert.ok(sp.title.length <= 47, `judul terlalu panjang: ${sp.title}`);
-    const b = new ctx.WkBatch('p1');
-    sp.draw(b);
-    b.req.filter(r => r.createShape || r.createTable).forEach(r => {
-      const ep = (r.createShape || r.createTable).elementProperties, y = ep.transform.translateY, h = ep.size.height.magnitude;
-      assert.ok(y + h <= 385, `[${sp.id}] keluar bawah slide`);
-    });
-    const est = run(`wkFindingPages(AN).find(p => p.id === '${sp.id}')`);
-    const tableBottom = 124 + 28 + est.rows.reduce((a, r) => a + run('wkFindingRowHeight')(r.cells), 0);
-    assert.ok(tableBottom <= 373, `[${sp.id}] perkiraan tabel melewati batas bawah (${tableBottom.toFixed(0)} pt)`);
-  });
-  console.log(`\n${label}: ${pages.length} slide temuan`);
-  fSpecs.forEach(sp => {
-    const pg = pages.find(p => p.id === sp.id);
-    console.log(`- [${sp.id}] ${sp.title} · ${pg.rows.length} baris${pg.overflow.length ? ` + ${pg.overflow.length} di notes` : ''}`);
-  });
-  return fSpecs;
+  // speaker notes slide 2 memuat SEMUA bisnis bertemuan beserta seluruh temuannya
+  const notes2 = specs[1].notes;
+  an.kebun.filter(k => k.findings.length).forEach(k => k.findings.forEach(f =>
+    assert.ok(notes2.indexOf(k.name) >= 0 && notes2.indexOf(f.text) >= 0, `${label}: notes tanpa ${k.name} / ${f.text}`)));
+  return specs;
 }
-const fs1 = checkFindings(A, 'Data contoh 6 kebun');
-console.log('  INSIGHT:', fs1[0].draw && run(`wkAutoFindingTexts(AN, wkFindingPages(AN)[0]).insight`));
-
-// data besar: 40 kebun, banyak temuan -> halaman dibatasi, sisanya di speaker notes
+checkSlides(A, null, 'teks otomatis');
+checkSlides(A, ai, 'dengan jawaban Claude');
 {
   const big = [];
   for (let i = 0; i < 40; i++) {
@@ -205,11 +200,17 @@ console.log('  INSIGHT:', fs1[0].draw && run(`wkAutoFindingTexts(AN, wkFindingPa
   }
   const saved = kebun.splice(0, kebun.length, ...big);
   const { an } = analyze(makeValues(new Date(2026, 8, 3), 7, 4), new Date(2026, 10, 1));
-  checkFindings(an, 'Data besar 40 kebun');
+  checkSlides(an, null, 'data besar 40 kebun');
   kebun.splice(0, kebun.length, ...saved);
 }
-ctx.AN = A;
+// tanpa tabel WAU: slide 1 memakai keaktifan input sebagai pengganti
+{
+  const { an } = analyze(makeValues(new Date(2026, 8, 3), 7, 4, false), new Date(2026, 10, 1));
+  assert.ok(an.warnings.some(w => /Tabel WAU/.test(w)));
+  checkSlides(an, null, 'tanpa tabel WAU');
+}
 
+ctx.AN = A;
 const auto = run('wkAutoTexts(AN)');
-console.log('\nINSIGHT otomatis:\n' + ['ringkasan', 'tren', 'tindak'].map(id => `- ${id}: ${auto[id].insight}`).join('\n'));
+console.log('\nINSIGHT otomatis:\n' + ['pemakaian', 'pelanggan'].map(id => `- ${id}: ${auto[id].insight}`).join('\n'));
 console.log('\nSemua uji lulus.');
